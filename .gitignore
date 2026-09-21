@@ -1,0 +1,7 @@
+/node_modules
+/vendor
+.phpunit.cache
+.pest
+/storage/logs
+.DS_Store
+*.log

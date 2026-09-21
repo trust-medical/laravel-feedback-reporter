@@ -1,0 +1,3 @@
+export { AttachmentValidationError, AvailabilityError, CaptureError, FeedbackReporter, FeedbackReporterError, RateLimitError, ServerError, TransportError, ValidationError, breadcrumbsCollector, captureScreenshot, checkAvailability, collectDiagnosticContext, consoleCollector, createFeedbackReporter, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString } from './chunk-YPL5YMV7.js';
+//# sourceMappingURL=index.js.map
+//# sourceMappingURL=index.js.map

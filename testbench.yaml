@@ -1,0 +1,10 @@
+providers:
+  - TrustMedical\FeedbackReporter\FeedbackReporterServiceProvider
+  - Workbench\App\Providers\WorkbenchServiceProvider
+
+migrations:
+  - database/migrations
+
+workbench:
+  start: '/'
+  install: true

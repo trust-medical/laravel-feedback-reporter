@@ -1,0 +1,20 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    volumes:
+      - .:/app
+      - composer-cache:/home/appuser/.composer/cache
+      - npm-cache:/home/appuser/.npm
+    environment:
+      - COMPOSER_ALLOW_SUPERUSER=0
+      - XDEBUG_MODE=off
+    working_dir: /app
+
+volumes:
+  composer-cache:
+  npm-cache:

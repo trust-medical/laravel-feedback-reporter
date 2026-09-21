@@ -1,0 +1,56 @@
+{
+  "name": "@trustmedical/feedback-reporter",
+  "version": "1.0.0",
+  "description": "Headless feedback reporter TypeScript SDK with automatic capture, attachments, and diagnostic context",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./alpine": {
+      "import": "./dist/alpine.js",
+      "types": "./dist/alpine.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check resources/js tests-js",
+    "format": "biome format --write resources/js tests-js",
+    "audit": "npm audit --audit-level=high"
+  },
+  "dependencies": {
+    "html-to-image": "^1.11.11"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.10.2",
+    "happy-dom": "^20.14.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "vite": "^6.4.3",
+    "@vitest/mocker": "^4.1.11"
+  },
+  "peerDependencies": {
+    "alpinejs": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "alpinejs": {
+      "optional": true
+    }
+  }
+}

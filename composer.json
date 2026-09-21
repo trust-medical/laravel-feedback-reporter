@@ -1,0 +1,76 @@
+{
+    "name": "trust-medical/laravel-feedback-reporter",
+    "description": "Headless feedback and diagnostic context reporter package for Laravel 12 & 13",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        {
+            "name": "Trust Medical",
+            "email": "dev@trustmedical.example.com"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "illuminate/contracts": "^12.0 || ^13.0",
+        "illuminate/database": "^12.0 || ^13.0",
+        "illuminate/events": "^12.0 || ^13.0",
+        "illuminate/filesystem": "^12.0 || ^13.0",
+        "illuminate/http": "^12.0 || ^13.0",
+        "illuminate/routing": "^12.0 || ^13.0",
+        "illuminate/support": "^12.0 || ^13.0",
+        "illuminate/validation": "^12.0 || ^13.0"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "laravel/pint": "^1.18",
+        "orchestra/testbench": "^10.0 || ^11.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0",
+        "phpstan/phpstan": "^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "TrustMedical\\FeedbackReporter\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "TrustMedical\\FeedbackReporter\\Tests\\": "tests/",
+            "Workbench\\App\\": "workbench/app/",
+            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
+            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=512M",
+        "format": "vendor/bin/pint",
+        "format-test": "vendor/bin/pint --test",
+        "audit": "composer audit"
+    },
+    "config": {
+        "sort-packages": true,
+        "secure-http": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "policy": {
+            "abandoned": {
+                "audit": "fail"
+            }
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "TrustMedical\\FeedbackReporter\\FeedbackReporterServiceProvider"
+            ],
+            "aliases": {
+                "FeedbackReporter": "TrustMedical\\FeedbackReporter\\Facades\\FeedbackReporter"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

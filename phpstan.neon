@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - src/
+        - config/
+
+    level: 8
+
+    reportUnmatchedIgnoredErrors: false
+
+    ignoreErrors:
+        - identifier: larastan.noEnvCallsOutsideOfConfig

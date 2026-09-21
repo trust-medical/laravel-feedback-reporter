@@ -1,0 +1,8 @@
+.git
+vendor
+node_modules
+dist
+.phpunit.cache
+.pest
+storage/logs
+.DS_Store
