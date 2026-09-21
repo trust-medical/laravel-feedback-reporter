@@ -2,7 +2,7 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
-## Unreleased
+## 2.0.0 - 2026-09-21
 
 ### Changed
 - **BREAKING**: Dropped PHP 8.2 support; PHP 8.3+ is now required for all supported Laravel versions.
