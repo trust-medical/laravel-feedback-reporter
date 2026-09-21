@@ -4,7 +4,7 @@
 
 A production-ready, headless feedback and technical diagnostic reporter package for **Laravel 12 and 13** (PHP 8.2+).
 
-[![Tests & Code Quality](https://github.com/TrustMedical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/TrustMedical/laravel-feedback-reporter/actions/workflows/tests.yml)
+[![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
 ---

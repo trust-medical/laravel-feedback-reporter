@@ -11,7 +11,7 @@ This repository requires only **Docker** and **Docker Compose** on your local ma
 Clone the repository and build the container:
 
 ```bash
-git clone https://github.com/TrustMedical/laravel-feedback-reporter.git
+git clone https://github.com/trust-medical/laravel-feedback-reporter.git
 cd laravel-feedback-reporter
 
 # Build container

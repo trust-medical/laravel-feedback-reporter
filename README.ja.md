@@ -4,7 +4,7 @@
 
 **Laravel 12 および 13**（PHP 8.2+）向けの、プロダクションレディなヘッドレス不具合報告・技術診断コンテキスト収集Composerパッケージ。
 
-[![Tests & Code Quality](https://github.com/TrustMedical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/TrustMedical/laravel-feedback-reporter/actions/workflows/tests.yml)
+[![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
 ---
