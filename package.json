@@ -33,7 +33,7 @@
     "html-to-image": "^1.11.11"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.5.14",
     "@types/node": "^26.6.1",
     "happy-dom": "^20.14.5",
     "tsup": "^8.3.5",
