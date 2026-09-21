@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-A production-ready, headless feedback and technical diagnostic reporter package for **Laravel 12 and 13** (PHP 8.2+).
+A production-ready, headless feedback and technical diagnostic reporter package for **Laravel 12 and 13** (PHP 8.3+).
 
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
@@ -28,7 +28,7 @@ A production-ready, headless feedback and technical diagnostic reporter package 
 
 ## 2. Requirements
 
-* **PHP**: 8.2 or 8.3+ (PHP 8.3+ required for Laravel 13 / Testbench 11)
+* **PHP**: 8.3+
 * **Laravel**: 12.x or 13.x
 * **Composer**: 2.x
 * **Node.js**: 20+ (for Frontend TypeScript SDK)

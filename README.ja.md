@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-**Laravel 12 および 13**（PHP 8.2+）向けの、プロダクションレディなヘッドレス不具合報告・技術診断コンテキスト収集Composerパッケージ。
+**Laravel 12 および 13**（PHP 8.3+）向けの、プロダクションレディなヘッドレス不具合報告・技術診断コンテキスト収集Composerパッケージ。
 
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
@@ -28,7 +28,7 @@
 
 ## 2. システム要件
 
-* **PHP**: 8.2 または 8.3+（Laravel 13 / Testbench 11環境ではPHP 8.3以上が必須）
+* **PHP**: 8.3+
 * **Laravel**: 12.x または 13.x
 * **Composer**: 2.x
 * **Node.js**: 20+（フロントエンドTypeScript SDK用）

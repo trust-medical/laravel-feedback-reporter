@@ -2,6 +2,17 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## Unreleased
+
+### Changed
+- **BREAKING**: Dropped PHP 8.2 support; PHP 8.3+ is now required for all supported Laravel versions.
+- Upgraded `pestphp/pest` and `pestphp/pest-plugin-laravel` from `^3.0` to `^4.0` to add Laravel 13 test coverage (the v3 line of `pest-plugin-laravel` never added Laravel 13 support).
+
+### Fixed
+- Fixed CI workflow using an invalid pinned commit SHA for `shivammathur/setup-php`, which caused every PHP job to fail with "Unable to resolve action".
+- Fixed `composer audit` running before dependencies were installed in CI, causing every PHP job to fail with "No installed packages found".
+- Added a missing `phpunit.xml`; without it, Pest generated a temporary config file guarded by `assert()`, which GitHub Actions' production `php.ini` (`zend.assertions=-1`) silently skipped, corrupting Pest's CLI argument parsing.
+
 ## 1.0.0 - 2026-09-19
 
 ### Added
