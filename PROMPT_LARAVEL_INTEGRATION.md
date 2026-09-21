@@ -23,7 +23,7 @@ If any prerequisite is not met, do NOT proceed with source code modifications or
 ### 1. PHP Version and Required Extensions
 - **Verification**: Run `php -v` and `php -m`
 - **Requirements**:
-  - **PHP 8.2 or higher** (*For Laravel 13 environments, **PHP 8.3 or higher** is strictly required*)
+  - **PHP 8.3 or higher**
   - Required PHP extensions: `fileinfo` (mandatory for binary verification of attachment MIME types), `json`, `mbstring`, `pdo`
 
 ### 2. Laravel Framework Version
