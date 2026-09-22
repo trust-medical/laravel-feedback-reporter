@@ -2,6 +2,13 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 3.0.0 - 2026-09-22
+
+### Changed
+- **BREAKING**: Renamed the frontend npm package from `@trustmedical/feedback-reporter` to `@trust-medical/feedback-reporter`.
+- Updated the English and Japanese installation guides and Laravel integration prompts to use the new npm scope.
+- Migrated the Biome configuration to the 2.5 schema used by the current development dependency.
+
 ## 2.0.0 - 2026-09-21
 
 ### Changed

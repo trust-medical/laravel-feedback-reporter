@@ -11,8 +11,8 @@ import type {
   CaptureOptions,
   DiagnosticContext,
   FeedbackAttachmentInput,
-  FeedbackReportOptions,
   FeedbackReporterConfig,
+  FeedbackReportOptions,
   FeedbackSubmitResponse,
 } from './types'
 

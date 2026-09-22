@@ -1,6 +1,6 @@
 {
-  "name": "@trustmedical/feedback-reporter",
-  "version": "2.0.0",
+  "name": "@trust-medical/feedback-reporter",
+  "version": "3.0.0",
   "description": "Headless feedback reporter TypeScript SDK with automatic capture, attachments, and diagnostic context",
   "license": "MIT",
   "type": "module",

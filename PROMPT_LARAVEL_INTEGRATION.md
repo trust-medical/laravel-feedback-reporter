@@ -58,7 +58,7 @@ Once prerequisites are confirmed, identify the following stack details to determ
 
 ## 1. Package Specifications and Core Principles
 - **Package Name**: `trust-medical/laravel-feedback-reporter`
-- **Frontend SDK**: `@trustmedical/feedback-reporter` + `html-to-image`
+- **Frontend SDK**: `@trust-medical/feedback-reporter` + `html-to-image`
 - **Core Architecture**:
   - **Headless Design**: The package provides no frontend UI or external notification dispatchers. It focuses strictly on APIs, data persistence, atomic transactions, orphaned file cleanup, and event dispatching.
   - **Privacy by Default**: Password fields (`input[type=password]`), cookies, Authorization headers, and CSRF tokens are never collected. DOM masking (`data-feedback-redact`) and capture omission (`data-feedback-ignore`) are strictly respected.
@@ -117,8 +117,8 @@ Create an event listener that subscribes to `FeedbackStored` to notify the devel
 Select and implement one of the following approaches based on the project's frontend environment:
 
 1. **Approach A: With Node.js & Build Tools (Vite, etc.)**:
-   - Run `npm install @trustmedical/feedback-reporter html-to-image` (or `pnpm add`, `yarn add`, `bun add` depending on the project's package manager).
-   - **Blade + Alpine.js**: Use `createAlpineFeedbackReporter` from `@trustmedical/feedback-reporter/alpine`.
+   - Run `npm install @trust-medical/feedback-reporter html-to-image` (or `pnpm add`, `yarn add`, `bun add` depending on the project's package manager).
+   - **Blade + Alpine.js**: Use `createAlpineFeedbackReporter` from `@trust-medical/feedback-reporter/alpine`.
    - **Inertia.js (Vue / React)**: Use `createFeedbackReporter()` to build a reactive modal component.
 2. **Approach B: Without Node.js (Vanilla JS / CDN / Standard HTML Forms)**:
    - **Vanilla JS / Fetch API**: Load `html-to-image` via CDN if needed, and submit to `/feedback-reporter/reports` using native `fetch()` with `FormData`.

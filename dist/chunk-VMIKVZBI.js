@@ -952,5 +952,5 @@ function createFeedbackReporter(config) {
 }
 
 export { AttachmentValidationError, AvailabilityError, CaptureError, FeedbackReporter, FeedbackReporterError, RateLimitError, ServerError, TransportError, ValidationError, breadcrumbsCollector, captureScreenshot, checkAvailability, collectDiagnosticContext, consoleCollector, createFeedbackReporter, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString };
-//# sourceMappingURL=chunk-YPL5YMV7.js.map
-//# sourceMappingURL=chunk-YPL5YMV7.js.map
+//# sourceMappingURL=chunk-VMIKVZBI.js.map
+//# sourceMappingURL=chunk-VMIKVZBI.js.map

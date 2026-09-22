@@ -1,3 +1,11 @@
+export { prepareAttachments } from './attachments'
+export { captureScreenshot } from './capture'
+export { collectDiagnosticContext } from './context'
+export { breadcrumbsCollector } from './diagnostics/breadcrumbs'
+export { consoleCollector } from './diagnostics/console'
+export { errorCollector } from './diagnostics/errors'
+export { networkErrorCollector } from './diagnostics/network'
+export { getNormalizedPerformance } from './diagnostics/performance'
 export {
   AttachmentValidationError,
   AvailabilityError,
@@ -8,38 +16,19 @@ export {
   TransportError,
   ValidationError,
 } from './errors'
-
 export {
   createFeedbackReporter,
   FeedbackReporter,
 } from './reporter'
-
-export { captureScreenshot } from './capture'
-
-export { collectDiagnosticContext } from './context'
-
 export {
   sanitizeUrl,
   truncateString,
 } from './sanitizer'
-
-export { prepareAttachments } from './attachments'
-
 export {
   checkAvailability,
   getCsrfToken,
   sendFeedbackReport,
 } from './transport'
-
-export { breadcrumbsCollector } from './diagnostics/breadcrumbs'
-
-export { consoleCollector } from './diagnostics/console'
-
-export { errorCollector } from './diagnostics/errors'
-
-export { networkErrorCollector } from './diagnostics/network'
-
-export { getNormalizedPerformance } from './diagnostics/performance'
 
 export type {
   CaptureOptions,

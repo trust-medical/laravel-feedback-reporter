@@ -59,7 +59,7 @@ php artisan migrate
 ### 3.3 Install Frontend TypeScript SDK
 
 ```bash
-npm install @trustmedical/feedback-reporter html-to-image
+npm install @trust-medical/feedback-reporter html-to-image
 ```
 
 ---
@@ -196,7 +196,7 @@ Even when routes are customized, using Laravel route helpers in your Blade layou
 ### 5.1 Basic Usage (Vanilla JS / Modern Frameworks)
 
 ```ts
-import { createFeedbackReporter } from '@trustmedical/feedback-reporter'
+import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
 
 const reporter = createFeedbackReporter({
     endpoint: '/feedback-reporter/reports',
@@ -268,7 +268,7 @@ Mask sensitive text or form fields temporarily during capture using `data-feedba
 </div>
 
 <script type="module">
-    import { createAlpineFeedbackReporter } from '@trustmedical/feedback-reporter/alpine'
+    import { createAlpineFeedbackReporter } from '@trust-medical/feedback-reporter/alpine'
     window.createAlpineFeedbackReporter = createAlpineFeedbackReporter
 </script>
 ```

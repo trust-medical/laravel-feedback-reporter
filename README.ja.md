@@ -59,7 +59,7 @@ php artisan migrate
 ### 3.3 フロントエンドTypeScript SDKの追加
 
 ```bash
-npm install @trustmedical/feedback-reporter html-to-image
+npm install @trust-medical/feedback-reporter html-to-image
 ```
 
 ---
@@ -196,7 +196,7 @@ FeedbackReporter::routes(options: [
 ### 5.1 基本的な利用例 (Vanilla JS / 各種フレームワーク)
 
 ```ts
-import { createFeedbackReporter } from '@trustmedical/feedback-reporter'
+import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
 
 const reporter = createFeedbackReporter({
     endpoint: '/feedback-reporter/reports',
@@ -268,7 +268,7 @@ await reporter.report({
 </div>
 
 <script type="module">
-    import { createAlpineFeedbackReporter } from '@trustmedical/feedback-reporter/alpine'
+    import { createAlpineFeedbackReporter } from '@trust-medical/feedback-reporter/alpine'
     window.createAlpineFeedbackReporter = createAlpineFeedbackReporter
 </script>
 ```

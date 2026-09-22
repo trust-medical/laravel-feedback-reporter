@@ -58,7 +58,7 @@
 
 ## 1. パッケージ仕様と基本原則
 - **パッケージ名**: `trust-medical/laravel-feedback-reporter`
-- **フロントエンドSDK**: `@trustmedical/feedback-reporter` + `html-to-image`
+- **フロントエンドSDK**: `@trust-medical/feedback-reporter` + `html-to-image`
 - **設計思想**:
   - **Headless設計**: パッケージ側はUIや外部通知を内包せず、API・永続化トランザクション・整合性クリーンアップ・イベント発火に特化。
   - **プライバシー保護**: パスワード項目（`input[type=password]`）、Cookie値、Authorizationヘッダー等は自動非収集。DOMのマスキング（`data-feedback-redact`）や除外（`data-feedback-ignore`）を尊重。
@@ -117,8 +117,8 @@
 プロジェクトの環境に合わせて以下のいずれかの方式を選択して実装してください:
 
 1. **方式A: Node.js / ビルドツール（Vite等）がある場合**:
-   - `npm install @trustmedical/feedback-reporter html-to-image`（プロジェクトで利用中のパッケージマネージャーに合わせて `pnpm add`, `yarn add`, `bun add` を使用）
-   - **Blade + Alpine.js**: `@trustmedical/feedback-reporter/alpine` の `createAlpineFeedbackReporter` を活用。
+   - `npm install @trust-medical/feedback-reporter html-to-image`（プロジェクトで利用中のパッケージマネージャーに合わせて `pnpm add`, `yarn add`, `bun add` を使用）
+   - **Blade + Alpine.js**: `@trust-medical/feedback-reporter/alpine` の `createAlpineFeedbackReporter` を活用。
    - **Inertia.js (Vue / React)**: `createFeedbackReporter()` を利用したコンポーネント。
 2. **方式B: Node.js環境がない場合（Vanilla JS / CDN / 標準HTMLフォーム）**:
    - **Vanilla JS / Fetch API**: 必要に応じてCDNから `html-to-image` を読み込み、ブラウザ標準の `fetch()` と `FormData` を用いて `/feedback-reporter/reports` へPOST送信。
