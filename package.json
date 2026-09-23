@@ -30,7 +30,8 @@
     "audit": "npm audit --audit-level=high"
   },
   "dependencies": {
-    "html-to-image": "^1.11.11"
+    "html-to-image": "^1.11.11",
+    "html2canvas-pro": "^2.4.4"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",

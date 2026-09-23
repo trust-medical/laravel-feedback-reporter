@@ -1,4 +1,4 @@
-import { F as FeedbackReporterConfig, a as FeedbackReporter, b as FeedbackAttachmentInput, c as FeedbackSubmitResponse } from './reporter-CFEUFh3v.js';
+import { F as FeedbackReporterConfig, a as FeedbackReporter, b as FeedbackAttachmentInput, c as FeedbackSubmitResponse } from './reporter-CZyfgOM4.js';
 
 declare function createAlpineFeedbackReporter(config?: FeedbackReporterConfig): {
     reporter: FeedbackReporter;

@@ -1,4 +1,5 @@
 import { toBlob } from 'html-to-image';
+import html2canvas from 'html2canvas-pro';
 
 // resources/js/errors.ts
 var FeedbackReporterError = class extends Error {
@@ -99,6 +100,29 @@ function prepareAttachments(rawAttachments, maxFiles = 5, maxFileSize = 5 * 1024
     };
   });
 }
+async function captureWithHtml2Canvas(target, filter, options) {
+  const canvas = await html2canvas(target, {
+    allowTaint: false,
+    backgroundColor: options?.backgroundColor ?? "#ffffff",
+    ignoreElements: (element) => !filter(element),
+    logging: false,
+    scale: options?.pixelRatio ?? 1,
+    useCORS: false
+  });
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob);
+          return;
+        }
+        reject(new CaptureError("Failed to generate image blob from target."));
+      },
+      "image/png",
+      options?.quality ?? 0.92
+    );
+  });
+}
 async function captureScreenshot(options) {
   const target = typeof options?.target === "function" ? options.target() : options?.target || document.documentElement;
   if (!target) {
@@ -137,7 +161,7 @@ async function captureScreenshot(options) {
       }
       return true;
     };
-    const blob = await toBlob(target, {
+    const blob = options?.renderer === "html2canvas" ? await captureWithHtml2Canvas(target, filter, options) : await toBlob(target, {
       pixelRatio: options?.pixelRatio ?? 1,
       quality: options?.quality ?? 0.92,
       backgroundColor: options?.backgroundColor ?? "#ffffff",
@@ -952,5 +976,5 @@ function createFeedbackReporter(config) {
 }
 
 export { AttachmentValidationError, AvailabilityError, CaptureError, FeedbackReporter, FeedbackReporterError, RateLimitError, ServerError, TransportError, ValidationError, breadcrumbsCollector, captureScreenshot, checkAvailability, collectDiagnosticContext, consoleCollector, createFeedbackReporter, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString };
-//# sourceMappingURL=chunk-VMIKVZBI.js.map
-//# sourceMappingURL=chunk-VMIKVZBI.js.map
+//# sourceMappingURL=chunk-64FRY6BH.js.map
+//# sourceMappingURL=chunk-64FRY6BH.js.map

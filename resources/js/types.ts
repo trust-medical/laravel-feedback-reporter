@@ -8,6 +8,7 @@ export interface FeedbackAttachmentInput {
 
 export interface CaptureOptions {
   enabled?: boolean
+  renderer?: 'html-to-image' | 'html2canvas'
   target?: HTMLElement | (() => HTMLElement | null) | null
   pixelRatio?: number
   quality?: number

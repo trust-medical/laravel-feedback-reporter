@@ -1,4 +1,5 @@
 import { toBlob } from 'html-to-image'
+import html2canvas from 'html2canvas-pro'
 import { CaptureError } from './errors'
 import type { CaptureOptions } from './types'
 
@@ -6,6 +7,37 @@ interface RedactedItem {
   element: Element
   originalText?: string
   originalValue?: string
+}
+
+async function captureWithHtml2Canvas(
+  target: HTMLElement,
+  filter: (node: HTMLElement) => boolean,
+  options?: CaptureOptions,
+): Promise<Blob> {
+  const canvas = await html2canvas(target, {
+    allowTaint: false,
+    backgroundColor: options?.backgroundColor ?? '#ffffff',
+    ignoreElements: (element) => !filter(element as HTMLElement),
+    logging: false,
+    scale: options?.pixelRatio ?? 1,
+    useCORS: false,
+  })
+
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          resolve(blob)
+
+          return
+        }
+
+        reject(new CaptureError('Failed to generate image blob from target.'))
+      },
+      'image/png',
+      options?.quality ?? 0.92,
+    )
+  })
 }
 
 export async function captureScreenshot(options?: CaptureOptions): Promise<Blob> {
@@ -60,13 +92,16 @@ export async function captureScreenshot(options?: CaptureOptions): Promise<Blob>
       return true
     }
 
-    const blob = await toBlob(target, {
-      pixelRatio: options?.pixelRatio ?? 1,
-      quality: options?.quality ?? 0.92,
-      backgroundColor: options?.backgroundColor ?? '#ffffff',
-      cacheBust: options?.cacheBust ?? true,
-      filter,
-    })
+    const blob =
+      options?.renderer === 'html2canvas'
+        ? await captureWithHtml2Canvas(target, filter, options)
+        : await toBlob(target, {
+            pixelRatio: options?.pixelRatio ?? 1,
+            quality: options?.quality ?? 0.92,
+            backgroundColor: options?.backgroundColor ?? '#ffffff',
+            cacheBust: options?.cacheBust ?? true,
+            filter,
+          })
 
     if (!blob) {
       throw new CaptureError('Failed to generate image blob from target.')
