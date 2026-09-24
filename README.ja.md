@@ -2,62 +2,125 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-手動スクリーンショットのアップロード、画像注釈、診断コンテキスト、任意導入のShadow DOM Web Componentを備えたLaravel 12/13向けフィードバック報告パッケージです。
+Laravel 12・13向けのフィードバック報告パッケージです。安全なLaravel受信エンドポイント、TypeScript SDK、任意導入の隔離されたWeb Componentを組み合わせ、メッセージ、手動撮影したスクリーンショット、画像注釈、診断コンテキストを送信できます。
 
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
-## v4でできること
+## 概要
 
-- 必須メッセージと、任意のPNG/JPEG/WebP画像を最大5枚保存します。
-- DOMを画像化せず、利用者がパソコンや携帯で撮影したスクリーンショットを受け付けます。
-- ズーム、全体表示、四角、矢印、Undo、削除、複数画像切り替えを備えた `<trust-feedback-reporter>` を任意で利用できます。
-- WidgetのDOMとCSSをopen Shadow DOM内へ隔離します。
-- パスワード、Cookie、Authorizationヘッダー、CSRFトークン、通信本文を取得せず、制限された診断情報を収集します。
-- レポートと添付のコミット後に `FeedbackStored` を発行します。
+Laravel Feedback Reporterは次の機能を提供します。
 
-Shadow DOMは意図しないCSS競合やDOMセレクターの干渉を防ぎます。同一ページ上で動く悪意あるスクリプトに対するセキュリティ境界ではありません。
+- 必須のフィードバックメッセージと、任意のPNG・JPEG・WebP画像
+- 公式の `<trust-feedback-reporter>` Web Component
+- 四角・矢印、Undo、削除、ズーム、全体表示、複数画像切り替え
+- 制限されたブラウザ・サーバー診断コンテキストの収集
+- 環境、認証、IP/CIDR、Gate、独自policyによる利用可否制御
+- 非公開画像保存、MIME検証、rate limit、冪等性、失敗時のatomicなcleanup
+- application側の通知・workflowへ接続する `FeedbackStored` event
 
-## 要件とインストール
+スクリーンショットは、利用者がパソコンや携帯の標準機能で撮影し、通常の画像ファイルとしてアップロードします。導入先ページのDOMを再構築・画像化しないため、ページのstyle、cross-origin画像、remote stylesheetはスクリーンショット作成へ影響しません。
+
+管理画面、添付画像のdownload route、通知channelは意図的に同梱していません。application固有の認可規則に従い、同梱Modelと保存完了eventを使って構築できます。
+
+## 動作要件
 
 - PHP 8.3以上
 - Laravel 12または13
-- JavaScript SDKを利用する場合はNode.js 20以上
+- Composer 2
+- TypeScript SDKまたはWeb Componentを使う場合はNode.js 20以上
+
+## インストール
+
+Laravel packageをインストールします。
 
 ```bash
-composer require trust-medical/laravel-feedback-reporter
+composer require trust-medical/laravel-feedback-reporter:^4.0
 php artisan vendor:publish --tag=feedback-reporter-config
-php artisan vendor:publish --tag=feedback-reporter-migrations
-php artisan migrate
-npm install @trust-medical/feedback-reporter
 ```
 
-パッケージを有効化し、利用条件を確認します。
+migrationはpackageから自動的に読み込まれます。application側でcopyを管理・確認する場合は、migrate前にpublishしてください。
+
+```bash
+php artisan vendor:publish --tag=feedback-reporter-migrations
+php artisan migrate
+```
+
+publishしない場合は、そのまま `php artisan migrate` を実行します。
+
+`.env` で報告機能を有効化します。
 
 ```dotenv
 FEEDBACK_REPORTER_ENABLED=true
 ```
 
-既定では `local` と `staging` の認証済みユーザーだけが利用できます。`config/feedback-reporter.php` で環境、認証、IP/CIDR、Gate、独自ポリシーを設定してください。画像の保存先には非公開ディスクを推奨します。
+Widgetまたはheadless SDKを使う場合はfrontend packageも追加します。
 
-パッケージは次のルートを登録します。
+```bash
+npm install @trust-medical/feedback-reporter@^4
+```
 
-- `GET /feedback-reporter/availability`
-- `POST /feedback-reporter/reports`
+## 利用可否とルート
 
-prefix、名前、middleware、domain、pathは変更できます。独自ルートを使う場合はboot前に `FeedbackReporter::ignoreRoutes()` を呼ぶか `FEEDBACK_REPORTER_REGISTER_ROUTES=false` とし、`FeedbackReporter::routes()` で登録してください。
+既定設定では、`local` または `staging` 環境の認証済みユーザーだけが利用できます。設定された次の条件をすべて満たす必要があります。
 
-## 公式Web Component
+- packageのmaster switch
+- 現在のapplication環境
+- 認証要件
+- IP/CIDRのdenylist、続いてallowlist
+- 任意のLaravel Gate
+- 任意の `FeedbackAvailability` 実装class
 
-Widgetは独立エントリのため、headless利用者はKonvaやUIコードを読み込みません。
+local開発以外で有効化する前に、`config/feedback-reporter.php` を確認してください。利用不可時は404を返し、endpointの存在を公開しない設定が既定です。
+
+既定のrouteは次のとおりです。
+
+| Method | URI | Route name | 用途 |
+| --- | --- | --- | --- |
+| `GET` | `/feedback-reporter/availability` | `feedback-reporter.availability` | `{"available": true|false}` を返す |
+| `POST` | `/feedback-reporter/reports` | `feedback-reporter.store` | reportを検証・保存する |
+
+POST routeには利用可否middlewareと `feedback-reporter` rate limiterが適用されます。既定値は1分あたり10回で、認証済みuser IDまたはclient IPをkeyにします。
+
+route prefix、name prefix、domain、middleware、個別pathは変更できます。application側でroute登録を管理する場合は、`FEEDBACK_REPORTER_REGISTER_ROUTES=false` を設定するか `FeedbackReporter::ignoreRoutes()` を呼び、application固有のoptionで登録します。
+
+```php
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use TrustMedical\FeedbackReporter\FeedbackReporter;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        FeedbackReporter::ignoreRoutes();
+    }
+
+    public function boot(): void
+    {
+        FeedbackReporter::routes(options: [
+            'prefix' => 'support/feedback',
+            'as' => 'support.feedback.',
+            'middleware' => ['web', 'auth'],
+        ]);
+    }
+}
+```
+
+## Web Component
+
+Widgetは最短でreporterを導入する方法です。独立したentryから配布されるため、headless SDKだけを使うapplicationはKonvaやWidget codeを読み込みません。
+
+frontend entryで一度登録します。
 
 ```ts
-import {
-    registerFeedbackReporterElement,
-} from '@trust-medical/feedback-reporter/widget'
+import { registerFeedbackReporterElement } from '@trust-medical/feedback-reporter/widget'
 
 registerFeedbackReporterElement()
 ```
+
+共通Blade layoutへ要素を配置します。
 
 ```blade
 <trust-feedback-reporter
@@ -65,15 +128,50 @@ registerFeedbackReporterElement()
     availability-endpoint="{{ route('feedback-reporter.availability') }}"
     source-type="web_site"
     route-name="{{ Route::currentRouteName() }}"
-    panel-id="admin"
     lang="ja"
     color-scheme="auto"
 ></trust-feedback-reporter>
 ```
 
-登録は明示的かつ冪等です。`registerFeedbackReporterElement('my-feedback')` で別のタグ名も指定できます。表示は `light`、`dark`、`auto`、言語は要素の `lang` または文書言語から日本語・英語を選択します。
+登録は明示的かつ冪等です。`registerFeedbackReporterElement('my-feedback-reporter')` で独自のelement名も登録できます。
 
-callback、header、metadata、URLフィルター、opt-in診断を渡す場合は、接続前に `config` を設定します。
+### 属性
+
+| 属性 | 既定値 | 内容 |
+| --- | --- | --- |
+| `endpoint` | `/feedback-reporter/reports` | report送信先URL |
+| `availability-endpoint` | `/feedback-reporter/availability` | 利用可否確認URL |
+| `source-type` | `web_site` | metadataへ保存するapplication定義の報告元 |
+| `route-name` | なし | metadataへ保存する現在のroute |
+| `panel-id` | なし | 任意の管理panel識別子 |
+| `lang` | document言語 | `ja` で始まれば日本語、それ以外は英語 |
+| `color-scheme` | `auto` | `auto`、`light`、`dark` |
+
+要素は非同期の `open()` と同期の `close()` methodを公開します。
+
+### 画像エディター
+
+同梱WidgetはPNG・JPEG・WebPを最大5枚、1枚5MB、合計20MBまで受け付けます。メッセージは常に必須で、画像は任意です。
+
+画像ごとに次の操作を利用できます。
+
+- 四角と矢印の描画、選択、移動、resize、削除
+- Undoと注釈の全消去
+- 50〜200%を25%刻みでzoom
+- 必要に応じ50%未満まで縮小する全体表示
+- 画像ごとのzoom・注釈状態を保った切り替え
+
+表示zoomはCSSだけに適用し、論理canvasや出力画像の解像度を下げません。未編集画像はそのまま、編集済み画像は注釈を合成して送信します。Widgetから送る画像sourceは `attachment` です。
+
+### 隔離とライフサイクル
+
+Widgetのmarkupと同梱CSSはopen Shadow DOM内に配置されます。Tailwindや導入先styleを必要とせず、DOM探索とkeyboard操作はShadow Rootまたはdialog内に限定されます。要素を切断すると、診断subscription、Konva Stage、Object URLを破棄します。
+
+Shadow DOMは意図しないCSS・selector競合を防ぎます。同一ページですでに実行されている悪意あるscriptに対するsecurity boundaryではありません。
+
+### Programmatic設定
+
+header、callback、metadata、URL filter、opt-in診断が必要な場合は、要素を接続する前に `config` を設定します。
 
 ```ts
 import {
@@ -83,21 +181,33 @@ import {
 
 registerFeedbackReporterElement()
 
-const widget = document.createElement('trust-feedback-reporter') as FeedbackReporterElement
+const widget = document.createElement(
+    'trust-feedback-reporter',
+) as FeedbackReporterElement
+
 widget.config = {
     endpoint: '/feedback-reporter/reports',
     availabilityEndpoint: '/feedback-reporter/availability',
-    sourceType: 'admin',
+    sourceType: 'admin_panel',
+    routeName: 'orders.show',
+    panelId: 'admin',
     reporter: {
-        diagnostics: { errors: true, performance: true },
+        diagnostics: {
+            errors: true,
+            performance: true,
+        },
+        metadata: {
+            application: 'back-office',
+        },
     },
 }
+
 document.body.append(widget)
 ```
 
-切断時にはKonva Stage、Object URL、診断リスナーを破棄します。WidgetはTailwindや導入先CSSを必要としません。
+## Headless TypeScript SDK
 
-## Headless SDK
+Widget codeを読み込まず独自UIを構築する場合はheadless entryを使います。
 
 ```ts
 import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
@@ -107,59 +217,119 @@ const reporter = createFeedbackReporter({
     availabilityEndpoint: '/feedback-reporter/availability',
 })
 
-await reporter.report({
-    message: '保存操作が完了しませんでした。',
+const input = document.querySelector<HTMLInputElement>('#screenshot')
+const screenshot = input?.files?.[0]
+
+const response = await reporter.report({
+    message: '保存ボタンを押しても処理が完了しません。',
     attachments: screenshot
         ? [{ file: screenshot, source: 'user_screenshot' }]
         : [],
 })
+
+console.log(response.id)
 ```
 
-`report()` は利用可否確認、設定済みコンテキスト収集、送信を行います。`submit()` は利用可否確認を省略します。画像sourceは `user_screenshot` と `attachment` です。
+利用できる画像sourceは次の2種類です。
 
-Alpine adapterは `@trust-medical/feedback-reporter/alpine` から利用できます。
+- `user_screenshot`: 独自UIがスクリーンショットとして明示する画像
+- `attachment`: その他の利用者提供画像、および公式Widgetが使用するsource
 
-## 診断情報とプライバシー
+`report()` は利用可否を確認してからcontext収集・送信を行います。`submit()` は利用可否requestを省略してcontext収集・送信を行います。`isAvailable()`、`collectContext()`、`initDiagnostics()`、`destroyDiagnostics()` も公開されています。
 
-送信時にページ、viewport、screen、browser、ネットワーク状態、active element、設定済みmetadataを収集します。継続的な監視は明示的に有効化しない限り動作しません。
+SDKはserver responseを `AvailabilityError`、`AttachmentValidationError`、`ValidationError`、`RateLimitError`、`ServerError`、`TransportError` として扱います。
+
+設定では、独自CSRF解決、request header、URL sanitization、storage key allowlist、同期・非同期metadata、診断、lifecycle callbackを指定できます。既定ではLaravelの `meta[name="csrf-token"]` を読み取ります。
+
+### Alpine adapter
 
 ```ts
-const reporter = createFeedbackReporter({
-    diagnostics: {
-        errors: true,
-        performance: true,
-        console: false,
-        network: false,
-        breadcrumbs: false,
-    },
-})
+import { createAlpineFeedbackReporter } from '@trust-medical/feedback-reporter/alpine'
+
+Alpine.data('feedbackReporter', () =>
+    createAlpineFeedbackReporter({
+        endpoint: '/feedback-reporter/reports',
+        availabilityEndpoint: '/feedback-reporter/availability',
+    }),
+)
 ```
 
-error収集にはキャンセルしない `error` イベントリスナーを使います。console、`fetch`、XHR監視はグローバル関数をラップするためopt-inです。collectorは参照カウントされ、自身のwrapperが現在も使われている場合だけ復元するため、後から導入された処理を上書きしません。
+adapterはmessage、attachments、availability、送信状態、直近response、添付helper、`submit()` を公開します。
 
-URLのquery値とhashは既定で除外します。Storage値はkeyをallowlistに指定しない限り取得しません。本番利用前に、有効化する診断情報とmetadataに個人情報・要配慮情報が含まれないか確認してください。
+## 診断コンテキストとプライバシー
 
-## バックエンド連携
+SDKは送信時に、次の制限されたsnapshotを収集します。
 
-リクエスト中に通知せず、コミット後イベントを購読します。
+- sanitize済みpage URL、origin、pathname、title、referrer
+- viewport、scroll位置、screen、locale、timezone、browser capability
+- network状態と正規化されたperformance情報
+- active elementのtag、ID、class名
+- application metadataと、明示的にallowlist指定したstorage値
+
+query値とURL hashは既定で除外します。query値はallowlistで指定したkeyだけ、hashは明示的に有効化した場合だけ含めます。browser storageは正確なkeyを設定しない限り読み取りません。
+
+継続的なcollectorは既定で無効です。
+
+| Option | 有効化した場合の動作 |
+| --- | --- |
+| `errors` | `window.onerror` を置換せず、errorと未処理rejectionを監視 |
+| `console` | `console.error` と `console.warn` をwrap |
+| `network` | `fetch` とXMLHttpRequestをwrapし、失敗を記録 |
+| `breadcrumbs` | 制限されたclick・submit・navigation metadataを記録 |
+| `performance` | 送信時のperformance snapshotを含める。明示的に `false` としない限り有効 |
+
+global wrapperは参照カウントされ、自身が現在もactiveなwrapperである場合だけ復元されます。継続collectorを有効化したheadless reporterを破棄する際は `destroyDiagnostics()` を呼んでください。
+
+SDKはpassword値、Cookie、Authorization header、CSRF token値、request・response body、無制限のstorageを意図的に収集しません。serverは独立して、認証user ID、client IP、User-Agent、受信日時、route、host、設定されたruntime versionを記録します。本番導入前にcustom metadataと明示的に有効化する診断情報へ個人情報・要配慮情報が含まれないか確認してください。
+
+## 保存とapplication連携
+
+reportとattachmentはULIDを主keyに使います。画像は次のpathへ保存されます。
+
+```text
+{storage.path}/{YYYY}/{MM}/{DD}/{report ULID}/{attachment ULID}.{extension}
+```
+
+既定diskは `local` です。画像は非公開のまま保持し、preview・downloadはGateまたはpolicyで保護したapplication routeから提供してください。SVGは既定で許可されません。serverは画像内容、1枚のsize、枚数、合計size、metadata byte数、metadata階層の深さを検証します。
+
+database書き込みはtransaction内で行われ、失敗時には書き込み済みfileを削除してorphanを残しません。uniqueな `client_report_id` により、同じclient識別子の重複保存を防ぎます。
+
+reportと添付の保存後、packageは `FeedbackStored` を発行します。
 
 ```php
 use TrustMedical\FeedbackReporter\Events\FeedbackStored;
 
-Event::listen(FeedbackStored::class, function (FeedbackStored $event): void {
-    SendFeedbackNotification::dispatch($event->feedbackReport->getKey());
-});
+final class QueueFeedbackNotification
+{
+    public function handle(FeedbackStored $event): void
+    {
+        SendFeedbackNotification::dispatch($event->feedback->getKey());
+    }
+}
 ```
 
-ModelはULIDを利用します。DBと添付保存はatomicで、MIME検証、metadataのサイズ・深さ制限、client report IDによる冪等性、既定10回/分のrate limitを備えます。
+`FeedbackReport` と、並び順が適用された `attachments` relationを使い、application固有の確認画面を構築できます。時間のかかる通知や外部連携は送信request内で実行せずqueueへ渡してください。
 
-## v3からの移行
+## 設定リファレンス
 
-v4では `captureScreenshot()`、`FeedbackReporter.capture()`、`CaptureOptions`、`CaptureError`、capture設定・callback・metadata、`html-to-image`/`html2canvas-pro`依存を削除しました。capture設定を除去し、利用者が作成した画像を送信してください。
+publishされる `config/feedback-reporter.php` は次のgroupで構成されます。
 
-v4 migrationは既存添付のsource `automatic_capture` を不可逆に `user_screenshot` へ変更します。過去のJSON metadataは書き換えません。
+- `enabled`: master switch
+- `availability`: 環境、認証、IP規則、Gate、policy、拒否status
+- `route`: 登録、prefix、name prefix、domain、middleware、path
+- `rate_limit`: 最大試行回数と減衰時間
+- `storage`: 非公開diskとbase path
+- `attachments`: 枚数、1枚のsize、合計size、許可MIME
+- `metadata`: 最大encode byte数と階層の深さ
+- `server_context`: environment、Laravel version、PHP versionの収集switch
 
-## 開発
+環境変数は設定file内で読み取ります。Laravelの設定cacheが機能するよう、application codeからは `config()` を使ってください。
+
+## 3.xからの移行
+
+v4ではDOM自動captureと、そのAPI・依存を削除しています。独自integrationは利用者が作成したfileを `attachments` へ渡してください。v4 migrationは既存の `automatic_capture` attachmentを `user_screenshot` へ変換し、過去のJSON metadataは維持します。
+
+## 開発とセキュリティ
 
 ```bash
 vendor/bin/pest
@@ -171,4 +341,4 @@ npm test
 npm run build
 ```
 
-Workbenchは手動ブラウザ検証にも配布対象と同じWeb Componentを読み込みます。[CONTRIBUTING.md](CONTRIBUTING.md) と [SECURITY.md](SECURITY.md) も参照してください。
+DockerとWorkbenchの手順は [CONTRIBUTING.md](CONTRIBUTING.md)、脆弱性の報告方法は [SECURITY.md](SECURITY.md) を参照してください。

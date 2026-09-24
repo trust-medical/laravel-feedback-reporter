@@ -2,62 +2,125 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-Laravel 12/13 feedback reporting with manual screenshot uploads, image annotations, diagnostic context, and an optional Shadow DOM Web Component.
+A feedback reporting package for Laravel 12 and 13. It combines a secure Laravel ingestion endpoint with a TypeScript SDK and an optional, isolated Web Component for submitting messages, manually captured screenshots, image annotations, and diagnostic context.
 
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
-## What v4 does
+## Overview
 
-- Stores a required feedback message and up to five optional PNG, JPEG, or WebP images.
-- Accepts screenshots taken by the user instead of reconstructing the page DOM.
-- Provides an optional `<trust-feedback-reporter>` UI with zoom, fit, rectangles, arrows, undo, deletion, and multiple-image switching.
-- Keeps the Widget's markup and CSS inside an open Shadow DOM.
-- Collects bounded diagnostic context without capturing passwords, cookies, authorization headers, CSRF tokens, or request/response bodies.
-- Dispatches `FeedbackStored` after a report and its attachments are committed.
+Laravel Feedback Reporter provides:
 
-The Shadow DOM prevents accidental CSS and DOM-selector conflicts. It is not a security boundary against malicious scripts running in the same page.
+- a required feedback message with optional PNG, JPEG, or WebP attachments;
+- an official `<trust-feedback-reporter>` Web Component;
+- rectangle and arrow annotations, undo, deletion, zoom, fit-to-view, and multiple-image switching;
+- automatic collection of bounded browser and server context;
+- configurable availability rules for environment, authentication, IP/CIDR, Gate, and custom policy;
+- private attachment storage, MIME validation, rate limiting, idempotency, and atomic cleanup;
+- a `FeedbackStored` event for application-owned notifications and workflows.
 
-## Requirements and installation
+Screenshots are taken with the user's computer or mobile device and uploaded as ordinary image files. The package does not reconstruct or capture the host page DOM, so page styles, cross-origin images, and remote stylesheets do not affect screenshot creation.
 
-- PHP 8.3+
+The package intentionally does not include an administration screen, attachment download route, or notification channel. Applications can build those features around the included models and committed event using their own authorization rules.
+
+## Requirements
+
+- PHP 8.3 or later
 - Laravel 12 or 13
-- Node.js 20+ when using the JavaScript SDK
+- Composer 2
+- Node.js 20 or later when using the TypeScript SDK or Web Component
+
+## Installation
+
+Install the Laravel package:
 
 ```bash
-composer require trust-medical/laravel-feedback-reporter
+composer require trust-medical/laravel-feedback-reporter:^4.0
 php artisan vendor:publish --tag=feedback-reporter-config
-php artisan vendor:publish --tag=feedback-reporter-migrations
-php artisan migrate
-npm install @trust-medical/feedback-reporter
 ```
 
-Enable the package and review its availability policy:
+The package loads its migrations automatically. When the application needs to own or review local copies, publish them before migrating:
+
+```bash
+php artisan vendor:publish --tag=feedback-reporter-migrations
+php artisan migrate
+```
+
+Otherwise, run `php artisan migrate` without publishing them.
+
+Enable reporting in `.env`:
 
 ```dotenv
 FEEDBACK_REPORTER_ENABLED=true
 ```
 
-By default, reporting is restricted to authenticated users in `local` and `staging`. Configure environments, authentication, IP/CIDR rules, a Gate, or a custom policy in `config/feedback-reporter.php`. Uploaded files should use a private storage disk.
+Install the frontend package when using the Widget or headless SDK:
 
-The package registers:
+```bash
+npm install @trust-medical/feedback-reporter@^4
+```
 
-- `GET /feedback-reporter/availability`
-- `POST /feedback-reporter/reports`
+## Availability and routes
 
-Route prefix, names, middleware, domain, and paths are configurable. Call `FeedbackReporter::ignoreRoutes()` before boot or set `FEEDBACK_REPORTER_REGISTER_ROUTES=false` when registering your own routes with `FeedbackReporter::routes()`.
+The default configuration allows authenticated users in the `local` and `staging` environments. Every configured availability condition must pass:
 
-## Official Web Component
+- package master switch;
+- current application environment;
+- authentication requirement;
+- IP/CIDR denylist, then allowlist;
+- optional Laravel Gate;
+- optional class implementing `FeedbackAvailability`.
 
-The Widget entry is separate, so headless consumers do not load Konva or UI code.
+Review `config/feedback-reporter.php` before enabling the package outside local development. Returning 404 for unavailable requests is the default and avoids advertising the endpoint.
+
+The default routes are:
+
+| Method | URI | Route name | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/feedback-reporter/availability` | `feedback-reporter.availability` | Returns `{"available": true|false}` |
+| `POST` | `/feedback-reporter/reports` | `feedback-reporter.store` | Validates and stores a report |
+
+The POST route applies the availability middleware and the `feedback-reporter` rate limiter. The default limit is ten submissions per minute, keyed by authenticated user ID or client IP.
+
+Route prefix, name prefix, domain, middleware, and individual paths are configurable. To own route registration, set `FEEDBACK_REPORTER_REGISTER_ROUTES=false` or call `FeedbackReporter::ignoreRoutes()`, then register the package routes with application-specific options:
+
+```php
+namespace App\Providers;
+
+use Illuminate\Support\ServiceProvider;
+use TrustMedical\FeedbackReporter\FeedbackReporter;
+
+final class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        FeedbackReporter::ignoreRoutes();
+    }
+
+    public function boot(): void
+    {
+        FeedbackReporter::routes(options: [
+            'prefix' => 'support/feedback',
+            'as' => 'support.feedback.',
+            'middleware' => ['web', 'auth'],
+        ]);
+    }
+}
+```
+
+## Web Component
+
+The Widget is the quickest way to add the reporter. It is published from a separate entry, so applications using only the headless SDK do not load Konva or Widget code.
+
+Register it once in a frontend entry:
 
 ```ts
-import {
-    registerFeedbackReporterElement,
-} from '@trust-medical/feedback-reporter/widget'
+import { registerFeedbackReporterElement } from '@trust-medical/feedback-reporter/widget'
 
 registerFeedbackReporterElement()
 ```
+
+Render the element in a shared Blade layout:
 
 ```blade
 <trust-feedback-reporter
@@ -65,15 +128,50 @@ registerFeedbackReporterElement()
     availability-endpoint="{{ route('feedback-reporter.availability') }}"
     source-type="web_site"
     route-name="{{ Route::currentRouteName() }}"
-    panel-id="admin"
     lang="en"
     color-scheme="auto"
 ></trust-feedback-reporter>
 ```
 
-Registration is explicit and idempotent. A different tag name can be supplied to `registerFeedbackReporterElement('my-feedback')`. Supported display values are `light`, `dark`, and `auto`; language is selected from the element's `lang` or the document language and currently supports English and Japanese.
+Registration is explicit and idempotent. A custom element name can be registered with `registerFeedbackReporterElement('my-feedback-reporter')`.
 
-For callbacks, headers, metadata, URL filtering, or opt-in diagnostics, set `config` before connecting the element:
+### Attributes
+
+| Attribute | Default | Description |
+| --- | --- | --- |
+| `endpoint` | `/feedback-reporter/reports` | Report submission URL |
+| `availability-endpoint` | `/feedback-reporter/availability` | Availability check URL |
+| `source-type` | `web_site` | Application-defined source value stored in report metadata |
+| `route-name` | none | Current application route stored in report metadata |
+| `panel-id` | none | Optional administration panel identifier |
+| `lang` | document language | Japanese when the language starts with `ja`; English otherwise |
+| `color-scheme` | `auto` | `auto`, `light`, or `dark` |
+
+The element exposes asynchronous `open()` and synchronous `close()` methods.
+
+### Image editor
+
+The built-in Widget accepts up to five PNG, JPEG, or WebP images, limited to 5 MB each and 20 MB in total. A message is always required; images are optional.
+
+For each image, users can:
+
+- draw, select, move, resize, and delete rectangles and arrows;
+- undo changes or clear all annotations;
+- zoom between 50% and 200% in 25% steps;
+- fit the complete image into the editor, including below 50% when needed;
+- switch between images without losing the image's zoom or annotation state.
+
+Display zoom uses CSS and does not reduce the logical canvas or exported image resolution. Unedited images are uploaded unchanged; edited images are exported with their annotations. Widget uploads use the `attachment` source.
+
+### Isolation and lifecycle
+
+The Widget renders its markup and bundled CSS in an open Shadow DOM. It does not require Tailwind or host styles, and its DOM queries and keyboard handling stay within the Shadow Root or dialog. Disconnecting the element releases diagnostic subscriptions, Konva stages, and object URLs.
+
+Shadow DOM prevents accidental CSS and selector conflicts. It is not a security boundary against scripts already executing in the same page.
+
+### Programmatic configuration
+
+Set `config` before connecting the element when headers, callbacks, metadata, URL filtering, or opt-in diagnostics are required:
 
 ```ts
 import {
@@ -83,21 +181,33 @@ import {
 
 registerFeedbackReporterElement()
 
-const widget = document.createElement('trust-feedback-reporter') as FeedbackReporterElement
+const widget = document.createElement(
+    'trust-feedback-reporter',
+) as FeedbackReporterElement
+
 widget.config = {
     endpoint: '/feedback-reporter/reports',
     availabilityEndpoint: '/feedback-reporter/availability',
-    sourceType: 'admin',
+    sourceType: 'admin_panel',
+    routeName: 'orders.show',
+    panelId: 'admin',
     reporter: {
-        diagnostics: { errors: true, performance: true },
+        diagnostics: {
+            errors: true,
+            performance: true,
+        },
+        metadata: {
+            application: 'back-office',
+        },
     },
 }
+
 document.body.append(widget)
 ```
 
-Disconnecting the element releases Konva stages, object URLs, and diagnostic listeners. The Widget does not require Tailwind or host-page CSS.
+## Headless TypeScript SDK
 
-## Headless SDK
+Use the headless entry to build a custom interface without loading Widget code:
 
 ```ts
 import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
@@ -107,59 +217,119 @@ const reporter = createFeedbackReporter({
     availabilityEndpoint: '/feedback-reporter/availability',
 })
 
-await reporter.report({
-    message: 'The save action did not complete.',
+const input = document.querySelector<HTMLInputElement>('#screenshot')
+const screenshot = input?.files?.[0]
+
+const response = await reporter.report({
+    message: 'The save button did not complete the operation.',
     attachments: screenshot
         ? [{ file: screenshot, source: 'user_screenshot' }]
         : [],
 })
+
+console.log(response.id)
 ```
 
-`report()` checks availability, collects configured context, and submits. `submit()` skips the availability request. Attachment sources are `user_screenshot` and `attachment`.
+Available attachment sources are:
 
-An Alpine adapter remains available from `@trust-medical/feedback-reporter/alpine`.
+- `user_screenshot`: an image explicitly identified as a screenshot by a custom UI;
+- `attachment`: another user-provided image, and the source used by the official Widget.
 
-## Diagnostics and privacy
+`report()` checks availability before collecting context and submitting. `submit()` collects context and submits without the availability request. `isAvailable()`, `collectContext()`, `initDiagnostics()`, and `destroyDiagnostics()` are also public.
 
-Basic page, viewport, screen, browser, network-state, active-element, and configured metadata are collected at submission. Continuous instrumentation is disabled unless explicitly enabled:
+The SDK maps server responses to `AvailabilityError`, `AttachmentValidationError`, `ValidationError`, `RateLimitError`, `ServerError`, or `TransportError`.
+
+Configuration supports custom CSRF resolution, request headers, URL sanitization, storage-key allowlists, static or asynchronous metadata, diagnostics, and lifecycle callbacks. The SDK reads Laravel's `meta[name="csrf-token"]` by default.
+
+### Alpine adapter
 
 ```ts
-const reporter = createFeedbackReporter({
-    diagnostics: {
-        errors: true,
-        performance: true,
-        console: false,
-        network: false,
-        breadcrumbs: false,
-    },
-})
+import { createAlpineFeedbackReporter } from '@trust-medical/feedback-reporter/alpine'
+
+Alpine.data('feedbackReporter', () =>
+    createAlpineFeedbackReporter({
+        endpoint: '/feedback-reporter/reports',
+        availabilityEndpoint: '/feedback-reporter/availability',
+    }),
+)
 ```
 
-Error collection uses a non-cancelling `error` event listener. Console, `fetch`, and XHR monitoring wrap globals and are therefore opt-in. Collectors are reference-counted and only restore a wrapper when it is still the active implementation, avoiding overwriting later integrations.
+The adapter exposes message, attachments, availability, submission state, the latest response, attachment helpers, and `submit()`.
 
-URL query values and hashes are excluded by default. Storage values are never collected unless keys are allowlisted. Review all enabled diagnostics and metadata for personal or regulated data before production use.
+## Diagnostic context and privacy
 
-## Backend integration
+At submission time, the SDK collects a bounded snapshot of:
 
-Subscribe to the committed event instead of sending notifications from the request:
+- sanitized page URL, origin, pathname, title, and referrer;
+- viewport, scroll position, screen, locale, timezone, and browser capabilities;
+- network state and normalized performance data;
+- the active element's tag, ID, and class names;
+- application metadata and explicitly allowlisted storage values.
+
+Query values and URL hashes are excluded by default. Query values can only be included through an allowlist; hashes require explicit opt-in. Browser storage values are not read unless exact keys are configured.
+
+Continuous collectors are disabled by default:
+
+| Option | Behavior when enabled |
+| --- | --- |
+| `errors` | Observes errors and unhandled rejections without replacing `window.onerror` |
+| `console` | Wraps `console.error` and `console.warn` |
+| `network` | Wraps `fetch` and XMLHttpRequest and records failures |
+| `breadcrumbs` | Records bounded click, submit, and navigation metadata |
+| `performance` | Includes the submission-time performance snapshot; enabled unless set to `false` |
+
+Global wrappers are reference-counted and are restored only while they remain the active wrapper. Call `destroyDiagnostics()` when disposing a headless reporter that enabled continuous collectors.
+
+The SDK does not intentionally collect password values, cookies, authorization headers, CSRF token values, request or response bodies, or unrestricted storage. The server independently records the authenticated user ID, client IP, User-Agent, receipt time, route, host, and configured runtime versions. Review custom metadata and explicitly enabled diagnostics for personal or regulated data.
+
+## Storage and application integration
+
+Reports and attachments use ULID primary keys. Attachment files are written to:
+
+```text
+{storage.path}/{YYYY}/{MM}/{DD}/{report ULID}/{attachment ULID}.{extension}
+```
+
+The default disk is `local`. Keep uploads private and expose previews or downloads only through application routes protected by a Gate or policy. SVG is excluded by default. The server validates image content, per-file size, file count, total size, metadata byte size, and metadata nesting depth.
+
+Database writes run in a transaction, and failures remove files already written so orphaned uploads are not left behind. The unique `client_report_id` prevents the same client identifier from being stored twice.
+
+After a report and its attachments are stored, the package dispatches `FeedbackStored`:
 
 ```php
 use TrustMedical\FeedbackReporter\Events\FeedbackStored;
 
-Event::listen(FeedbackStored::class, function (FeedbackStored $event): void {
-    SendFeedbackNotification::dispatch($event->feedbackReport->getKey());
-});
+final class QueueFeedbackNotification
+{
+    public function handle(FeedbackStored $event): void
+    {
+        SendFeedbackNotification::dispatch($event->feedback->getKey());
+    }
+}
 ```
 
-Models use ULIDs. Writes and attachments are atomic, uploads are MIME-validated, metadata size/depth is bounded, client report IDs provide idempotency, and the default rate limit is ten requests per minute.
+Use `FeedbackReport` and its ordered `attachments` relationship to build an application-specific review screen. Queue slow notification or external integration work instead of performing it in the submission request.
 
-## Upgrading from v3
+## Configuration reference
 
-Version 4 removes `captureScreenshot()`, `FeedbackReporter.capture()`, `CaptureOptions`, `CaptureError`, all capture configuration/callbacks/metadata, and the `html-to-image`/`html2canvas-pro` dependencies. Remove capture options and submit user-created files instead.
+The published `config/feedback-reporter.php` groups settings under:
 
-The v4 migration irreversibly changes existing attachment rows with source `automatic_capture` to `user_screenshot`. Historical JSON metadata is not rewritten.
+- `enabled`: master switch;
+- `availability`: environments, authentication, IP rules, Gate, policy, and denial status;
+- `route`: registration, prefix, name prefix, domain, middleware, and paths;
+- `rate_limit`: maximum attempts and decay interval;
+- `storage`: private disk and base path;
+- `attachments`: count, size, total size, and allowed MIME types;
+- `metadata`: maximum encoded bytes and nesting depth;
+- `server_context`: environment, Laravel version, and PHP version switches.
 
-## Development
+Environment variables are read by the configuration file. Application code should use `config()` so Laravel configuration caching continues to work.
+
+## Upgrading from 3.x
+
+Version 4 removes automatic DOM capture and its capture APIs and dependencies. Custom integrations should provide user-created files through `attachments`. The v4 migration converts existing `automatic_capture` attachment rows to `user_screenshot`; existing JSON metadata is preserved.
+
+## Development and security
 
 ```bash
 vendor/bin/pest
@@ -171,4 +341,4 @@ npm test
 npm run build
 ```
 
-The Workbench loads the same packaged Web Component for manual browser verification. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the Docker and Workbench workflow. Report vulnerabilities according to [SECURITY.md](SECURITY.md).
