@@ -86,8 +86,8 @@ make shell
 php artisan serve --host=0.0.0.0 --port=8000
 ```
 
-Then visit `http://localhost:8000` to test capture, manual attachments, and submission via the Workbench development view.
-*(Note: This UI is strictly for local package testing and is not part of the production package).*
+Then visit `http://localhost:8000` to test the packaged Web Component, manual image uploads, annotations, zoom, and submission.
+The page is development-only, but it deliberately imports the same `dist/widget.js` entry distributed to applications.
 
 ## 7. Pull Request Checklist
 
@@ -96,4 +96,6 @@ Then visit `http://localhost:8000` to test capture, manual attachments, and subm
 3. [ ] PHPStan passes without errors (`vendor/bin/phpstan analyse`).
 4. [ ] TypeScript passes without errors (`npm run typecheck`).
 5. [ ] Pint style checks pass (`vendor/bin/pint --test`).
-6. [ ] Bundle builds cleanly (`npm run build`).
+6. [ ] Biome passes (`npm run lint`).
+7. [ ] The headless, Alpine, and Widget bundles build cleanly (`npm run build`).
+8. [ ] Dependency audits pass (`composer audit` and `npm run audit`).

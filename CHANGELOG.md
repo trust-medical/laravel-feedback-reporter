@@ -2,6 +2,27 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 4.0.0 - 2026-09-24
+
+### Added
+- Added the explicitly registered `<trust-feedback-reporter>` Web Component in a separate `@trust-medical/feedback-reporter/widget` entry.
+- Added isolated open Shadow DOM styles, English/Japanese UI, manual image upload, annotations, per-image zoom, fit, undo, deletion, and image switching.
+- Added safe reference counting and teardown for opt-in diagnostic collectors.
+
+### Changed
+- **BREAKING**: Feedback now uses a required message and optional user-created screenshots or image attachments instead of DOM capture.
+- **BREAKING**: Attachment sources are now `user_screenshot` and `attachment`. The migration irreversibly maps existing `automatic_capture` rows to `user_screenshot`.
+- Continuous console, fetch, XHR, error, and breadcrumb instrumentation is disabled unless explicitly enabled. Error collection now uses a non-cancelling event listener.
+- Moved Konva into the Widget entry's dependency graph while keeping headless consumers on a separate entry.
+
+### Removed
+- **BREAKING**: Removed `captureScreenshot()`, `FeedbackReporter.capture()`, `CaptureOptions`, `CaptureError`, capture options, callbacks, and capture metadata.
+- Removed `html-to-image`, `html2canvas-pro`, DOM redaction/ignore behavior, and capture-specific CORS handling.
+
+### Security
+- Diagnostic global wrappers only restore themselves when still active, preventing teardown from overwriting integrations installed later.
+- Documented that Shadow DOM provides style and DOM encapsulation, not a security boundary against same-page scripts.
+
 ## 3.0.0 - 2026-09-22
 
 ### Changed
