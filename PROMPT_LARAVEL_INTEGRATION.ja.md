@@ -1,11 +1,11 @@
-# Laravel Feedback Reporter v4 導入プロンプト
+# Laravel Feedback Reporter v4.1 導入プロンプト
 
 以下をAIコーディングアシスタントへの依頼文、または実装チェックリストとして利用してください。
 
 ```markdown
-# Laravel Feedback Reporter v4を導入する
+# Laravel Feedback Reporter v4.1を導入する
 
-このLaravelアプリケーションへ `trust-medical/laravel-feedback-reporter:^4.0` と `@trust-medical/feedback-reporter@^4` を導入してください。v4はmessageを必須とし、利用者がパソコンや携帯で撮影したスクリーンショットをuploadする方式です。画像は任意です。DOMの自動画像化やv3以前のcapture動作は実装しないでください。
+このLaravelアプリケーションへ `trust-medical/laravel-feedback-reporter:^4.1` と `@trust-medical/feedback-reporter@^4.1` を導入してください。v4はmessageを必須とし、利用者がパソコンや携帯で撮影したスクリーンショットをuploadする方式です。画像は任意です。DOMの自動画像化やv3以前のcapture動作は実装しないでください。
 
 ## 最初にapplicationを確認する
 
@@ -26,7 +26,7 @@
 1. packageをinstallし、configをpublishしてmigrateします。
 
    ```bash
-   composer require trust-medical/laravel-feedback-reporter:^4.0
+   composer require trust-medical/laravel-feedback-reporter:^4.1
    php artisan vendor:publish --tag=feedback-reporter-config
    php artisan migrate
    ```
@@ -51,7 +51,7 @@ security boundaryは三層目です。client側の非表示はserver認可の代
 frontend packageをinstallします。
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4
+npm install @trust-medical/feedback-reporter@^4.1
 ```
 
 custom elementの登録だけを行う小さなVite entryを1つ作ります。
@@ -137,11 +137,11 @@ Feature testには次を含めます。
 - 認可済みpreview/download、拒否、storage object欠損
 - reportと診断情報のescape
 
-PHP Feature testで証明できない動作だけをbrowser testで確認します。Widget登録、Shadow Root描画、upload、annotation、zoom、全体表示、Undo、削除、画像切り替え、送信、mobileの折り返しとscroll、一般画面・管理画面の両方を対象にします。強いhost CSSと同名data属性を加え、styleが双方向に漏れないことも確認します。固定sleepではなく観測可能なUI状態を待ち、JavaScript errorがないことをassertします。
+PHP Feature testで証明できない動作だけをbrowser testで確認します。Widget登録、Shadow Root描画、upload、添付削除、annotation、移動・手のひらtool、zoom、全体表示、GUIによるUndo・削除、画像切り替え、送信完了表示と自動close、mobileの折り返しとscroll、一般画面・管理画面の両方を対象にします。強いhost CSSと同名data属性を加え、styleが双方向に漏れないことも確認します。固定sleepではなく観測可能なUI状態を待ち、JavaScript errorがないことをassertします。
 
 ## 受け入れ確認
 
-- 画像なしでmessageを送信でき、1枚以上の手動スクリーンショットをannotationして送信できる。
+- 画像なしでmessageを送信でき、1枚以上の手動スクリーンショットを削除・annotation・panして送信できる。
 - 利用可否とreviewer認可が合意したauth、environment、network、Gate、policyへ一致する。
 - 非公開添付へ認可なしでアクセスできない。
 - 指定された全layoutでWidgetが動作し、hostとWidget間でstyleが漏れない。

@@ -13,7 +13,7 @@ Laravel Feedback Reporter provides:
 
 - a required feedback message with optional PNG, JPEG, or WebP attachments;
 - an official `<trust-feedback-reporter>` Web Component;
-- rectangle and arrow annotations, undo, deletion, zoom, fit-to-view, and multiple-image switching;
+- rectangle and arrow annotations, move and hand tools, GUI undo/deletion, high-density zoom, fit-to-view, attachment removal, and multiple-image switching;
 - automatic collection of bounded browser and server context;
 - configurable availability rules for environment, authentication, IP/CIDR, Gate, and custom policy;
 - private attachment storage, MIME validation, rate limiting, idempotency, and atomic cleanup;
@@ -35,7 +35,7 @@ The package intentionally does not include an administration screen, attachment 
 Install the Laravel package:
 
 ```bash
-composer require trust-medical/laravel-feedback-reporter:^4.0
+composer require trust-medical/laravel-feedback-reporter:^4.1
 php artisan vendor:publish --tag=feedback-reporter-config
 ```
 
@@ -57,7 +57,7 @@ FEEDBACK_REPORTER_ENABLED=true
 Install the frontend package when using the Widget or headless SDK:
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4
+npm install @trust-medical/feedback-reporter@^4.1
 ```
 
 ## Availability and routes
@@ -155,17 +155,19 @@ The built-in Widget accepts up to five PNG, JPEG, or WebP images, limited to 5 M
 
 For each image, users can:
 
-- draw, select, move, resize, and delete rectangles and arrows;
-- undo changes or clear all annotations;
+- remove an attached image before submission;
+- draw rectangles and arrows, then move, resize, or delete them;
+- pan a zoomed image with the hand tool;
+- undo, delete a selected shape, or clear annotations with visible controls;
 - zoom between 50% and 200% in 25% steps;
 - fit the complete image into the editor, including below 50% when needed;
 - switch between images without losing the image's zoom or annotation state.
 
-Display zoom uses CSS and does not reduce the logical canvas or exported image resolution. Unedited images are uploaded unchanged; edited images are exported with their annotations. Widget uploads use the `attachment` source.
+The editor stays within a fixed modal workspace while zoomed content scrolls inside its viewport. Display zoom uses CSS and does not reduce logical coordinates or exported resolution. Konva layers use a higher-density backing canvas, up to the useful source-image and maximum-zoom density, to reduce blur when zooming. Unedited images are uploaded unchanged; edited images are exported with their annotations. After a successful submission, the Widget announces completion and closes the dialog. Widget uploads use the `attachment` source.
 
 ### Isolation and lifecycle
 
-The Widget renders its markup and bundled CSS in an open Shadow DOM. It does not require Tailwind or host styles, and its DOM queries and keyboard handling stay within the Shadow Root or dialog. Disconnecting the element releases diagnostic subscriptions, Konva stages, and object URLs.
+The Widget renders its markup and bundled CSS in an open Shadow DOM. It does not require Tailwind or host styles, and its DOM queries and event handling stay within the Shadow Root or dialog. Disconnecting the element releases diagnostic subscriptions, Konva stages, and object URLs.
 
 Shadow DOM prevents accidental CSS and selector conflicts. It is not a security boundary against scripts already executing in the same page.
 

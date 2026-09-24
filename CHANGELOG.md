@@ -2,6 +2,18 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 4.1.0 - 2026-09-24
+
+### Added
+- Added per-attachment removal controls and a hand tool for panning zoomed images inside the editor viewport.
+- Added GUI controls for every annotation editing action and automatic dialog closure after an announced successful submission.
+
+### Changed
+- Renamed the annotation “Select” tool to “Move” and moved the annotation toolbar below the image viewport.
+- Fixed the Widget modal workspace size so zooming changes only the scrollable canvas content.
+- Increased interactive Konva layer backing density up to the useful source-image and maximum-zoom density to reduce blur without changing logical coordinates or export resolution.
+- Removed annotation keyboard shortcuts and their help text in favor of visible, accessible controls.
+
 ## 4.0.0 - 2026-09-24
 
 ### Added

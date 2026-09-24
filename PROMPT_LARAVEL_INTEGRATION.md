@@ -1,11 +1,11 @@
-# Laravel Feedback Reporter v4 integration prompt
+# Laravel Feedback Reporter v4.1 integration prompt
 
 Copy the prompt below into an AI coding assistant or use it as an implementation checklist.
 
 ```markdown
-# Integrate Laravel Feedback Reporter v4
+# Integrate Laravel Feedback Reporter v4.1
 
-Integrate `trust-medical/laravel-feedback-reporter:^4.0` and `@trust-medical/feedback-reporter@^4` into this Laravel application. Version 4 is message-first: users take screenshots on their computer or phone and upload them. Images are optional. Do not implement DOM screenshot capture or restore pre-v4 capture behavior.
+Integrate `trust-medical/laravel-feedback-reporter:^4.1` and `@trust-medical/feedback-reporter@^4.1` into this Laravel application. Version 4 is message-first: users take screenshots on their computer or phone and upload them. Images are optional. Do not implement DOM screenshot capture or restore pre-v4 capture behavior.
 
 ## Inspect the application first
 
@@ -26,7 +26,7 @@ If a prerequisite is missing, report it before installing dependencies. Prefer t
 1. Install the package, publish its config, and migrate:
 
    ```bash
-   composer require trust-medical/laravel-feedback-reporter:^4.0
+   composer require trust-medical/laravel-feedback-reporter:^4.1
    php artisan vendor:publish --tag=feedback-reporter-config
    php artisan migrate
    ```
@@ -51,7 +51,7 @@ The third layer is the security boundary. Client-side hiding never replaces serv
 Install the frontend package:
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4
+npm install @trust-medical/feedback-reporter@^4.1
 ```
 
 Create one small Vite entry that only registers the custom element:
@@ -137,11 +137,11 @@ Feature coverage must include:
 - authorized preview/download, denied access, and a missing storage object;
 - escaped report and diagnostic output.
 
-Use browser tests only for behavior PHP feature tests cannot prove: registration, Shadow Root rendering, upload, annotations, zoom, fit, undo, delete, image switching, submission, mobile wrapping/scrolling, and operation on normal and administration pages. Add strong host CSS and same-named data attributes to verify isolation in both directions. Wait for observable UI state instead of fixed sleeps and assert that no JavaScript errors occurred.
+Use browser tests only for behavior PHP feature tests cannot prove: registration, Shadow Root rendering, upload, attachment removal, annotations, move and hand tools, zoom, fit, GUI undo/delete, image switching, success confirmation and automatic close, mobile wrapping/scrolling, and operation on normal and administration pages. Add strong host CSS and same-named data attributes to verify isolation in both directions. Wait for observable UI state instead of fixed sleeps and assert that no JavaScript errors occurred.
 
 ## Acceptance checks
 
-- A message can be sent without an image, and one or more manual screenshots can be annotated and sent.
+- A message can be sent without an image, and one or more manual screenshots can be removed, annotated, panned, and sent.
 - Availability and reviewer authorization match the agreed auth, environment, network, Gate, or policy rules.
 - Private attachments cannot be accessed without authorization.
 - The Widget works on all requested layouts without host/Widget style leakage.

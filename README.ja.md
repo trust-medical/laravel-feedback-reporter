@@ -13,7 +13,7 @@ Laravel Feedback Reporterは次の機能を提供します。
 
 - 必須のフィードバックメッセージと、任意のPNG・JPEG・WebP画像
 - 公式の `<trust-feedback-reporter>` Web Component
-- 四角・矢印、Undo、削除、ズーム、全体表示、複数画像切り替え
+- 四角・矢印、移動・手のひらtool、GUIによるUndo・削除、高密度zoom、全体表示、添付削除、複数画像切り替え
 - 制限されたブラウザ・サーバー診断コンテキストの収集
 - 環境、認証、IP/CIDR、Gate、独自policyによる利用可否制御
 - 非公開画像保存、MIME検証、rate limit、冪等性、失敗時のatomicなcleanup
@@ -35,7 +35,7 @@ Laravel Feedback Reporterは次の機能を提供します。
 Laravel packageをインストールします。
 
 ```bash
-composer require trust-medical/laravel-feedback-reporter:^4.0
+composer require trust-medical/laravel-feedback-reporter:^4.1
 php artisan vendor:publish --tag=feedback-reporter-config
 ```
 
@@ -57,7 +57,7 @@ FEEDBACK_REPORTER_ENABLED=true
 Widgetまたはheadless SDKを使う場合はfrontend packageも追加します。
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4
+npm install @trust-medical/feedback-reporter@^4.1
 ```
 
 ## 利用可否とルート
@@ -155,17 +155,19 @@ registerFeedbackReporterElement()
 
 画像ごとに次の操作を利用できます。
 
-- 四角と矢印の描画、選択、移動、resize、削除
-- Undoと注釈の全消去
+- 送信前の添付画像削除
+- 四角と矢印の描画、その後の移動・resize・削除
+- 手のひらtoolによるzoom画像内のscroll
+- 表示されたcontrolによるUndo、選択図形の削除、注釈の全消去
 - 50〜200%を25%刻みでzoom
 - 必要に応じ50%未満まで縮小する全体表示
 - 画像ごとのzoom・注釈状態を保った切り替え
 
-表示zoomはCSSだけに適用し、論理canvasや出力画像の解像度を下げません。未編集画像はそのまま、編集済み画像は注釈を合成して送信します。Widgetから送る画像sourceは `attachment` です。
+editorは固定されたmodal内に留まり、zoomしたcontentだけがviewport内でscrollします。表示zoomはCSSへ適用し、論理座標や出力解像度を下げません。Konva layerは元画像と最大zoomで有効な範囲までbacking canvasを高密度化し、拡大時のぼやけを抑えます。未編集画像はそのまま、編集済み画像は注釈を合成して送信します。送信成功後は完了を通知してdialogを閉じます。Widgetから送る画像sourceは `attachment` です。
 
 ### 隔離とライフサイクル
 
-Widgetのmarkupと同梱CSSはopen Shadow DOM内に配置されます。Tailwindや導入先styleを必要とせず、DOM探索とkeyboard操作はShadow Rootまたはdialog内に限定されます。要素を切断すると、診断subscription、Konva Stage、Object URLを破棄します。
+Widgetのmarkupと同梱CSSはopen Shadow DOM内に配置されます。Tailwindや導入先styleを必要とせず、DOM探索とevent処理はShadow Rootまたはdialog内に限定されます。要素を切断すると、診断subscription、Konva Stage、Object URLを破棄します。
 
 Shadow DOMは意図しないCSS・selector競合を防ぎます。同一ページですでに実行されている悪意あるscriptに対するsecurity boundaryではありません。
 

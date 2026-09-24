@@ -86,7 +86,7 @@ make shell
 php artisan serve --host=0.0.0.0 --port=8000
 ```
 
-Then visit `http://localhost:8000` to test the packaged Web Component, manual image uploads, annotations, zoom, and submission.
+Then visit `http://localhost:8000` to test the packaged Web Component, manual image uploads and removal, annotations, hand-tool panning, zoom, and successful submission close behavior.
 The page is development-only, but it deliberately imports the same `dist/widget.js` entry distributed to applications.
 
 ## 7. Pull Request Checklist
