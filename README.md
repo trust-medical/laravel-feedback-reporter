@@ -7,21 +7,31 @@ A feedback reporting package for Laravel 12 and 13. It combines a secure Laravel
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
-## Overview
+## Current submission model
 
-Laravel Feedback Reporter provides:
+Laravel Feedback Reporter sends a required message, optional user-provided images, and bounded diagnostic context.
 
-- a required feedback message with optional PNG, JPEG, or WebP attachments;
-- an official `<trust-feedback-reporter>` Web Component;
-- rectangle and arrow annotations, icon-labelled move and hand tools, GUI undo/deletion, high-density zoom, attachment removal, and multiple-image switching;
-- automatic collection of bounded browser and server context;
-- configurable availability rules for environment, authentication, IP/CIDR, Gate, and custom policy;
-- private attachment storage, MIME validation, rate limiting, idempotency, and atomic cleanup;
-- a `FeedbackStored` event for application-owned notifications and workflows.
+- A message is required; images are optional.
+- Images are uploaded as ordinary PNG, JPEG, or WebP files.
+- The package does not turn the host page DOM into a screenshot.
+- The official Widget submits every selected image with the `attachment` source.
+- `user_screenshot` is an optional classification for headless clients, not a switch that changes image processing.
+- The removed `automatic_capture` value is rejected.
 
-Screenshots are taken with the user's computer or mobile device and uploaded as ordinary image files. The package does not reconstruct or capture the host page DOM, so page styles, cross-origin images, and remote stylesheets do not affect screenshot creation.
+Because the package does not reconstruct the DOM, cross-origin images, remote stylesheets, canvases, and iframes do not create capture failures or fidelity problems.
 
-The package intentionally does not include an administration screen, attachment download route, or notification channel. Applications can build those features around the included models and committed event using their own authorization rules.
+### Package layers
+
+| Layer | Provides |
+| --- | --- |
+| Laravel package | Availability checks, ingestion routes, validation, private storage, models, and a stored event |
+| `@trust-medical/feedback-reporter/widget` | Official `<trust-feedback-reporter>` isolated with Shadow DOM |
+| `@trust-medical/feedback-reporter` | Headless TypeScript SDK for custom interfaces |
+| `@trust-medical/feedback-reporter/alpine` | Alpine.js state adapter |
+
+Only the Widget entry loads Konva and the image editor. The headless entry does not bundle Widget code.
+
+The package intentionally leaves administration screens, attachment preview/download routes, and notification channels to the application so they can follow application-specific authorization, retention, and delivery requirements.
 
 ## Requirements
 
@@ -58,6 +68,12 @@ Install the frontend package when using the Widget or headless SDK:
 
 ```bash
 npm install @trust-medical/feedback-reporter@^4.2
+```
+
+Layouts that submit from the frontend must provide Laravel's CSRF token:
+
+```blade
+<meta name="csrf-token" content="{{ csrf_token() }}">
 ```
 
 ## Availability and routes
@@ -147,11 +163,13 @@ Registration is explicit and idempotent. A custom element name can be registered
 | `lang` | document language | Japanese when the language starts with `ja`; English otherwise |
 | `color-scheme` | `auto` | `auto`, `light`, or `dark` |
 
+`source-type` is an application-defined value stored in report metadata. It is separate from an attachment's `source` value described below.
+
 The element exposes asynchronous `open()` and synchronous `close()` methods.
 
 ### Image editor
 
-The built-in Widget accepts up to five PNG, JPEG, or WebP images, limited to 5 MB each and 20 MB in total. A message is always required; images are optional.
+The built-in Widget accepts up to five PNG, JPEG, or WebP images, limited to 5 MB each and 20 MB in total. A message is always required; images are optional. The server enforces independent limits, so custom server configuration should remain compatible with the Widget's fixed limits.
 
 For each image, users can:
 
@@ -208,7 +226,7 @@ document.body.append(widget)
 
 ## Headless TypeScript SDK
 
-Use the headless entry to build a custom interface without loading Widget code:
+Use the headless entry to build a custom interface without loading Widget code. New integrations should normally submit user-selected images as `attachment` values.
 
 ```ts
 import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
@@ -218,29 +236,34 @@ const reporter = createFeedbackReporter({
     availabilityEndpoint: '/feedback-reporter/availability',
 })
 
-const input = document.querySelector<HTMLInputElement>('#screenshot')
-const screenshot = input?.files?.[0]
+const input = document.querySelector<HTMLInputElement>('#feedback-images')
+const files = Array.from(input?.files ?? [])
 
 const response = await reporter.report({
     message: 'The save button did not complete the operation.',
-    attachments: screenshot
-        ? [{ file: screenshot, source: 'user_screenshot' }]
-        : [],
+    attachments: files.map((file) => ({
+        file,
+        source: 'attachment',
+    })),
 })
 
 console.log(response.id)
 ```
 
-Available attachment sources are:
+### Attachment sources
 
-- `user_screenshot`: an image explicitly identified as a screenshot by a custom UI;
-- `attachment`: another user-provided image, and the source used by the official Widget.
+| Value | Current purpose |
+| --- | --- |
+| `attachment` | Normal value for new integrations and the value used by the official Widget |
+| `user_screenshot` | Optional semantic classification when a custom headless UI needs to distinguish screenshots; also the migration target for historical v3 data |
 
-`report()` checks availability before collecting context and submitting. `submit()` collects context and submits without the availability request. `isAvailable()`, `collectContext()`, `initDiagnostics()`, and `destroyDiagnostics()` are also public.
+`user_screenshot` does not enable capture or annotation and does not change validation, storage location, or storage behavior. Use `attachment` for normal new integrations, including Widget integrations.
+
+`report()` checks availability before collecting context and submitting. `submit()` skips the availability request, then collects context and submits. `isAvailable()`, `collectContext()`, `initDiagnostics()`, and `destroyDiagnostics()` are also public.
 
 The SDK maps server responses to `AvailabilityError`, `AttachmentValidationError`, `ValidationError`, `RateLimitError`, `ServerError`, or `TransportError`.
 
-Configuration supports custom CSRF resolution, request headers, URL sanitization, storage-key allowlists, static or asynchronous metadata, diagnostics, and lifecycle callbacks. The SDK reads Laravel's `meta[name="csrf-token"]` by default.
+Configuration supports custom CSRF resolution, synchronous or asynchronous headers, URL sanitization, storage-key allowlists, synchronous or asynchronous metadata, diagnostics, and lifecycle callbacks. The SDK reads Laravel's `meta[name="csrf-token"]` by default. Do not set a multipart `Content-Type` header manually; the browser adds the required `FormData` boundary.
 
 ### Alpine adapter
 
@@ -255,7 +278,7 @@ Alpine.data('feedbackReporter', () =>
 )
 ```
 
-The adapter exposes message, attachments, availability, submission state, the latest response, attachment helpers, and `submit()`.
+The adapter exposes message, attachments, availability, submission state, the latest response, attachment helpers, and `submit()`. `addAttachment()` defaults to the `attachment` source.
 
 ## Diagnostic context and privacy
 
@@ -328,7 +351,7 @@ Environment variables are read by the configuration file. Application code shoul
 
 ## Upgrading from 3.x
 
-Version 4 removes automatic DOM capture and its capture APIs and dependencies. Custom integrations should provide user-created files through `attachments`. The v4 migration converts existing `automatic_capture` attachment rows to `user_screenshot`; existing JSON metadata is preserved.
+Version 4 removes DOM capture, capture APIs, callbacks, metadata, and capture-only dependencies. Custom integrations pass user-provided files through `attachments`. `automatic_capture` submissions are rejected. The v4 migration irreversibly maps existing `automatic_capture` database rows to `user_screenshot` while preserving historical JSON metadata.
 
 ## Development and security
 
@@ -342,4 +365,4 @@ npm test
 npm run build
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the Docker and Workbench workflow. Report vulnerabilities according to [SECURITY.md](SECURITY.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the Docker and Workbench workflow, [CHANGELOG.md](CHANGELOG.md) for release history, and [SECURITY.md](SECURITY.md) for vulnerability reporting.

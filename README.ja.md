@@ -7,21 +7,31 @@ Laravel 12・13向けのフィードバック報告パッケージです。安�
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
-## 概要
+## 現在の送信モデル
 
-Laravel Feedback Reporterは次の機能を提供します。
+Laravel Feedback Reporterは、メッセージを中心に、利用者が自分の端末で用意した画像と診断コンテキストを送信します。
 
-- 必須のフィードバックメッセージと、任意のPNG・JPEG・WebP画像
-- 公式の `<trust-feedback-reporter>` Web Component
-- 四角・矢印、icon付きの移動・手のひらtool、GUIによるUndo・図形削除、高密度zoom、添付削除、複数画像切り替え
-- 制限されたブラウザ・サーバー診断コンテキストの収集
-- 環境、認証、IP/CIDR、Gate、独自policyによる利用可否制御
-- 非公開画像保存、MIME検証、rate limit、冪等性、失敗時のatomicなcleanup
-- application側の通知・workflowへ接続する `FeedbackStored` event
+- メッセージは必須、画像は任意です。
+- 画像はPNG・JPEG・WebPの通常fileとしてアップロードします。
+- 導入先ページのDOMを画像化する機能はありません。
+- 公式Widgetは選択された画像をすべて `attachment` として送信します。
+- `user_screenshot` はheadless clientが必要に応じて使う分類値であり、画像処理を変更するswitchではありません。
+- 削除済みの `automatic_capture` は受け付けません。
 
-スクリーンショットは、利用者がパソコンや携帯の標準機能で撮影し、通常の画像ファイルとしてアップロードします。導入先ページのDOMを再構築・画像化しないため、ページのstyle、cross-origin画像、remote stylesheetはスクリーンショット作成へ影響しません。
+DOMを再構築しないため、cross-origin画像、remote stylesheet、canvas、iframeによるcapture失敗や再現性の問題を避けられます。
 
-管理画面、添付画像のdownload route、通知channelは意図的に同梱していません。application固有の認可規則に従い、同梱Modelと保存完了eventを使って構築できます。
+### 提供するレイヤー
+
+| レイヤー | 提供内容 |
+| --- | --- |
+| Laravel package | 利用可否判定、受信route、validation、非公開保存、Model、保存完了event |
+| `@trust-medical/feedback-reporter/widget` | Shadow DOMで隔離された公式 `<trust-feedback-reporter>` |
+| `@trust-medical/feedback-reporter` | 独自UI向けheadless TypeScript SDK |
+| `@trust-medical/feedback-reporter/alpine` | Alpine.js用state adapter |
+
+Widget entryだけがKonvaと画像編集UIを読み込みます。headless entryはWidget codeをbundleしません。
+
+packageは管理画面、添付画像のpreview・download route、通知channelを意図的に同梱していません。application固有の認可・保持・通知要件に合わせ、同梱Modelと `FeedbackStored` eventから構築します。
 
 ## 動作要件
 
@@ -58,6 +68,12 @@ Widgetまたはheadless SDKを使う場合はfrontend packageも追加します�
 
 ```bash
 npm install @trust-medical/feedback-reporter@^4.2
+```
+
+frontendからPOSTするlayoutにはLaravelのCSRF tokenを配置します。
+
+```blade
+<meta name="csrf-token" content="{{ csrf_token() }}">
 ```
 
 ## 利用可否とルート
@@ -147,11 +163,13 @@ registerFeedbackReporterElement()
 | `lang` | document言語 | `ja` で始まれば日本語、それ以外は英語 |
 | `color-scheme` | `auto` | `auto`、`light`、`dark` |
 
+`source-type` はreport metadataへ保存するapplication定義の値です。後述するattachmentの `source` とは別物です。
+
 要素は非同期の `open()` と同期の `close()` methodを公開します。
 
 ### 画像エディター
 
-同梱WidgetはPNG・JPEG・WebPを最大5枚、1枚5MB、合計20MBまで受け付けます。メッセージは常に必須で、画像は任意です。
+同梱WidgetはPNG・JPEG・WebPを最大5枚、1枚5MB、合計20MBまで受け付けます。メッセージは常に必須で、画像は任意です。server側にも独立した制限があるため、設定を変更する場合はWidgetの固定制限と矛盾しない値にしてください。
 
 画像ごとに次の操作を利用できます。
 
@@ -208,7 +226,7 @@ document.body.append(widget)
 
 ## Headless TypeScript SDK
 
-Widget codeを読み込まず独自UIを構築する場合はheadless entryを使います。
+Widgetを読み込まず独自UIを構築する場合はheadless entryを使います。新規integrationでは、利用者が選択した画像を通常の `attachment` として渡します。
 
 ```ts
 import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
@@ -218,29 +236,34 @@ const reporter = createFeedbackReporter({
     availabilityEndpoint: '/feedback-reporter/availability',
 })
 
-const input = document.querySelector<HTMLInputElement>('#screenshot')
-const screenshot = input?.files?.[0]
+const input = document.querySelector<HTMLInputElement>('#feedback-images')
+const files = Array.from(input?.files ?? [])
 
 const response = await reporter.report({
     message: '保存ボタンを押しても処理が完了しません。',
-    attachments: screenshot
-        ? [{ file: screenshot, source: 'user_screenshot' }]
-        : [],
+    attachments: files.map((file) => ({
+        file,
+        source: 'attachment',
+    })),
 })
 
 console.log(response.id)
 ```
 
-利用できる画像sourceは次の2種類です。
+### attachment source
 
-- `user_screenshot`: 独自UIがスクリーンショットとして明示する画像
-- `attachment`: その他の利用者提供画像、および公式Widgetが使用するsource
+| 値 | 現在の用途 |
+| --- | --- |
+| `attachment` | 新規integrationで通常使用する値。公式Widgetもこの値を使用 |
+| `user_screenshot` | 独自headless UIが画像を意味上「スクリーンショット」と分類したい場合の任意値。また、v3から移行した履歴dataの変換先 |
+
+`user_screenshot` を指定しても、capture、注釈、validation、保存先、保存処理は変わりません。公式Widgetを含む通常の新規導入では `attachment` を使用してください。
 
 `report()` は利用可否を確認してからcontext収集・送信を行います。`submit()` は利用可否requestを省略してcontext収集・送信を行います。`isAvailable()`、`collectContext()`、`initDiagnostics()`、`destroyDiagnostics()` も公開されています。
 
 SDKはserver responseを `AvailabilityError`、`AttachmentValidationError`、`ValidationError`、`RateLimitError`、`ServerError`、`TransportError` として扱います。
 
-設定では、独自CSRF解決、request header、URL sanitization、storage key allowlist、同期・非同期metadata、診断、lifecycle callbackを指定できます。既定ではLaravelの `meta[name="csrf-token"]` を読み取ります。
+設定では、独自CSRF解決、同期・非同期header、URL sanitization、storage key allowlist、同期・非同期metadata、診断、lifecycle callbackを指定できます。既定ではLaravelの `meta[name="csrf-token"]` を読み取ります。`FormData` の `Content-Type` はbrowserがboundaryとともに設定するため、独自headerへ追加しないでください。
 
 ### Alpine adapter
 
@@ -255,7 +278,7 @@ Alpine.data('feedbackReporter', () =>
 )
 ```
 
-adapterはmessage、attachments、availability、送信状態、直近response、添付helper、`submit()` を公開します。
+adapterはmessage、attachments、availability、送信状態、直近response、添付helper、`submit()` を公開します。`addAttachment()` のsource既定値は `attachment` です。
 
 ## 診断コンテキストとプライバシー
 
@@ -328,7 +351,7 @@ publishされる `config/feedback-reporter.php` は次のgroupで構成されま
 
 ## 3.xからの移行
 
-v4ではDOM自動captureと、そのAPI・依存を削除しています。独自integrationは利用者が作成したfileを `attachments` へ渡してください。v4 migrationは既存の `automatic_capture` attachmentを `user_screenshot` へ変換し、過去のJSON metadataは維持します。
+v4ではDOM自動capture、capture API、callback、metadata、専用依存を削除しています。独自integrationは利用者が用意したfileを `attachments` へ渡してください。`automatic_capture` は送信できません。v4 migrationは既存DBの `automatic_capture` を `user_screenshot` へ不可逆に変換し、過去のJSON metadataは履歴として維持します。
 
 ## 開発とセキュリティ
 
@@ -342,4 +365,4 @@ npm test
 npm run build
 ```
 
-DockerとWorkbenchの手順は [CONTRIBUTING.md](CONTRIBUTING.md)、脆弱性の報告方法は [SECURITY.md](SECURITY.md) を参照してください。
+DockerとWorkbenchの手順は [CONTRIBUTING.md](CONTRIBUTING.md)、変更履歴は [CHANGELOG.md](CHANGELOG.md)、脆弱性の報告方法は [SECURITY.md](SECURITY.md) を参照してください。
