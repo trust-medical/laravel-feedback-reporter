@@ -51,7 +51,7 @@ class StoreFeedbackRequest extends FormRequest
 
         return [
             'client_report_id' => ['nullable', 'string', 'max:64', 'unique:feedback_reports,client_report_id'],
-            'message' => ['nullable', 'string', 'max:10000'],
+            'message' => ['required', 'string', 'max:10000'],
             'page_url' => ['nullable', 'string', 'max:2048'],
             'page_title' => ['nullable', 'string', 'max:255'],
             'viewport_width' => ['nullable', 'integer', 'min:0'],
@@ -87,18 +87,13 @@ class StoreFeedbackRequest extends FormRequest
             /** @var array<mixed>|null $attachments */
             $attachments = $this->file('attachments');
 
-            // 1. Either message or at least one attachment must be present
-            $hasMessage = is_string($message) && trim($message) !== '';
-            $hasAttachments = is_array($attachments) && count($attachments) > 0;
-
-            if (! $hasMessage && ! $hasAttachments) {
+            if (is_string($message) && trim($message) === '') {
                 $validator->errors()->add(
                     'message',
-                    'Feedback must contain either a non-empty message or at least one attachment.'
+                    'The feedback message must not be blank.'
                 );
             }
 
-            // 2. Validate total upload size
             if (is_array($attachments)) {
                 $maxTotalKb = (int) config('feedback-reporter.attachments.max_total_size_kb', 20480);
                 $maxTotalBytes = $maxTotalKb * 1024;

@@ -11,22 +11,28 @@ class BreadcrumbsCollector {
   private buffer: BreadcrumbItem[] = []
   private maxEntries: number = 50
   private installed: boolean = false
+  private subscribers: number = 0
   private clickHandler: ((e: MouseEvent) => void) | null = null
   private submitHandler: ((e: SubmitEvent) => void) | null = null
   private popstateHandler: (() => void) | null = null
 
   public init(maxEntries: number = 50): void {
-    if (this.installed || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (this.installed) {
+      this.subscribers += 1
       return
     }
 
     this.maxEntries = maxEntries
     this.installed = true
+    this.subscribers = 1
 
     // 1. Click listener (only records tag, id, safe class names, and target text up to 30 chars if safe)
     this.clickHandler = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
-      if (!target || !target.tagName) {
+      if (!target?.tagName) {
         return
       }
 
@@ -57,7 +63,7 @@ class BreadcrumbsCollector {
     // 2. Form submit listener (NO form values recorded)
     this.submitHandler = (e: SubmitEvent) => {
       const target = e.target as HTMLFormElement | null
-      if (!target || !target.tagName) {
+      if (!target?.tagName) {
         return
       }
 
@@ -104,6 +110,11 @@ class BreadcrumbsCollector {
       return
     }
 
+    if (this.subscribers > 1) {
+      this.subscribers -= 1
+      return
+    }
+
     if (this.clickHandler) {
       document.removeEventListener('click', this.clickHandler, true)
     }
@@ -116,6 +127,10 @@ class BreadcrumbsCollector {
 
     this.buffer = []
     this.installed = false
+    this.subscribers = 0
+    this.clickHandler = null
+    this.submitHandler = null
+    this.popstateHandler = null
   }
 }
 

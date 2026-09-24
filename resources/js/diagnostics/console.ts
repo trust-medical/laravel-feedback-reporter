@@ -10,29 +10,39 @@ class ConsoleCollector {
   private buffer: CapturedConsoleItem[] = []
   private maxEntries: number = 20
   private installed: boolean = false
+  private subscribers: number = 0
+  private wrappedError: typeof console.error | null = null
+  private wrappedWarn: typeof console.warn | null = null
   private originalError: typeof console.error | null = null
   private originalWarn: typeof console.warn | null = null
 
   public init(maxEntries: number = 20): void {
-    if (this.installed || typeof console === 'undefined') {
+    if (typeof console === 'undefined') {
+      return
+    }
+    if (this.installed) {
+      this.subscribers += 1
       return
     }
 
     this.maxEntries = maxEntries
     this.installed = true
+    this.subscribers = 1
 
     this.originalError = console.error
     this.originalWarn = console.warn
 
-    console.error = (...args: unknown[]) => {
+    this.wrappedError = (...args: unknown[]) => {
       this.add('error', args)
       this.originalError?.apply(console, args)
     }
+    console.error = this.wrappedError
 
-    console.warn = (...args: unknown[]) => {
+    this.wrappedWarn = (...args: unknown[]) => {
       this.add('warn', args)
       this.originalWarn?.apply(console, args)
     }
+    console.warn = this.wrappedWarn
   }
 
   private add(level: 'error' | 'warn', args: unknown[]): void {
@@ -74,15 +84,25 @@ class ConsoleCollector {
       return
     }
 
-    if (this.originalError) {
+    if (this.subscribers > 1) {
+      this.subscribers -= 1
+      return
+    }
+
+    if (this.originalError && console.error === this.wrappedError) {
       console.error = this.originalError
     }
-    if (this.originalWarn) {
+    if (this.originalWarn && console.warn === this.wrappedWarn) {
       console.warn = this.originalWarn
     }
 
     this.buffer = []
     this.installed = false
+    this.subscribers = 0
+    this.originalError = null
+    this.originalWarn = null
+    this.wrappedError = null
+    this.wrappedWarn = null
   }
 }
 

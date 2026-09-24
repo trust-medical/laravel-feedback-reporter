@@ -1,19 +1,8 @@
-type FeedbackImageSource = 'automatic_capture' | 'user_screenshot' | 'attachment';
+type FeedbackImageSource = 'user_screenshot' | 'attachment';
 interface FeedbackAttachmentInput {
     file: File | Blob;
     source: FeedbackImageSource;
     filename?: string;
-}
-interface CaptureOptions {
-    enabled?: boolean;
-    renderer?: 'html-to-image' | 'html2canvas';
-    target?: HTMLElement | (() => HTMLElement | null) | null;
-    pixelRatio?: number;
-    quality?: number;
-    backgroundColor?: string | null;
-    cacheBust?: boolean;
-    filter?: (node: HTMLElement) => boolean;
-    captureFailure?: 'continue' | 'throw';
 }
 interface UrlSanitizationOptions {
     query?: {
@@ -46,9 +35,6 @@ interface FeedbackSubmitResponse {
     success: boolean;
 }
 interface FeedbackReporterCallbacks {
-    onCaptureStart?: () => void;
-    onCaptureSuccess?: (blob: Blob) => void;
-    onCaptureError?: (error: unknown) => void;
     onContextCollected?: (context: Record<string, unknown>) => void;
     onSubmitStart?: () => void;
     onSubmitSuccess?: (response: FeedbackSubmitResponse) => void;
@@ -59,7 +45,6 @@ interface FeedbackReporterConfig {
     availabilityEndpoint?: string;
     csrfToken?: string | (() => string | null);
     headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>);
-    capture?: CaptureOptions;
     url?: UrlSanitizationOptions;
     storage?: StorageOptions;
     metadata?: Record<string, unknown> | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
@@ -67,7 +52,7 @@ interface FeedbackReporterConfig {
     callbacks?: FeedbackReporterCallbacks;
 }
 interface FeedbackReportOptions {
-    message?: string;
+    message: string;
     attachments?: FeedbackAttachmentInput[];
     metadata?: Record<string, unknown> | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
     signal?: AbortSignal;
@@ -85,21 +70,7 @@ interface DiagnosticContext {
     console?: unknown[];
     network_errors?: unknown[];
     breadcrumbs?: unknown[];
-    capture?: Record<string, unknown>;
     application?: Record<string, unknown>;
 }
 
-declare class FeedbackReporter {
-    private readonly config;
-    constructor(config?: FeedbackReporterConfig);
-    initDiagnostics(): void;
-    destroyDiagnostics(): void;
-    isAvailable(signal?: AbortSignal): Promise<boolean>;
-    capture(options?: CaptureOptions): Promise<Blob>;
-    collectContext(): Promise<DiagnosticContext>;
-    submit(options: FeedbackReportOptions): Promise<FeedbackSubmitResponse>;
-    report(options?: FeedbackReportOptions): Promise<FeedbackSubmitResponse>;
-}
-declare function createFeedbackReporter(config?: FeedbackReporterConfig): FeedbackReporter;
-
-export { type CaptureOptions as C, type DiagnosticContext as D, type FeedbackReporterConfig as F, type StorageOptions as S, type UrlSanitizationOptions as U, FeedbackReporter as a, type FeedbackAttachmentInput as b, type FeedbackSubmitResponse as c, type DiagnosticsOptions as d, type FeedbackImageSource as e, type FeedbackReportOptions as f, type FeedbackReporterCallbacks as g, createFeedbackReporter as h };
+export type { DiagnosticContext as D, FeedbackReporterConfig as F, StorageOptions as S, UrlSanitizationOptions as U, FeedbackAttachmentInput as a, FeedbackSubmitResponse as b, DiagnosticsOptions as c, FeedbackImageSource as d, FeedbackReportOptions as e, FeedbackReporterCallbacks as f };

@@ -1,5 +1,4 @@
 export { prepareAttachments } from './attachments'
-export { captureScreenshot } from './capture'
 export { collectDiagnosticContext } from './context'
 export { breadcrumbsCollector } from './diagnostics/breadcrumbs'
 export { consoleCollector } from './diagnostics/console'
@@ -9,7 +8,6 @@ export { getNormalizedPerformance } from './diagnostics/performance'
 export {
   AttachmentValidationError,
   AvailabilityError,
-  CaptureError,
   FeedbackReporterError,
   RateLimitError,
   ServerError,
@@ -31,7 +29,6 @@ export {
 } from './transport'
 
 export type {
-  CaptureOptions,
   DiagnosticContext,
   DiagnosticsOptions,
   FeedbackAttachmentInput,

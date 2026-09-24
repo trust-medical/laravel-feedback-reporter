@@ -16,16 +16,6 @@ export class AvailabilityError extends FeedbackReporterError {
   }
 }
 
-export class CaptureError extends FeedbackReporterError {
-  constructor(
-    message: string,
-    public readonly originalError?: unknown,
-  ) {
-    super(message)
-    this.name = 'CaptureError'
-  }
-}
-
 export class AttachmentValidationError extends FeedbackReporterError {
   constructor(message: string) {
     super(message)

@@ -6,7 +6,6 @@ namespace TrustMedical\FeedbackReporter\Enums;
 
 enum AttachmentSource: string
 {
-    case AutomaticCapture = 'automatic_capture';
     case UserScreenshot = 'user_screenshot';
     case Attachment = 'attachment';
 

@@ -1,4 +1,4 @@
-import { createFeedbackReporter } from './chunk-64FRY6BH.js';
+import { createFeedbackReporter } from './chunk-C65TNJGS.js';
 
 // resources/js/alpine.ts
 function createAlpineFeedbackReporter(config) {

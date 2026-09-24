@@ -12,17 +12,26 @@ class NetworkErrorCollector {
   private buffer: CapturedNetworkErrorItem[] = []
   private maxEntries: number = 20
   private installed: boolean = false
+  private subscribers: number = 0
+  private wrappedFetch: typeof window.fetch | null = null
+  private wrappedXhrOpen: typeof XMLHttpRequest.prototype.open | null = null
+  private wrappedXhrSend: typeof XMLHttpRequest.prototype.send | null = null
   private originalFetch: typeof window.fetch | null = null
   private originalXhrOpen: typeof XMLHttpRequest.prototype.open | null = null
   private originalXhrSend: typeof XMLHttpRequest.prototype.send | null = null
 
   public init(maxEntries: number = 20): void {
-    if (this.installed || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (this.installed) {
+      this.subscribers += 1
       return
     }
 
     this.maxEntries = maxEntries
     this.installed = true
+    this.subscribers = 1
 
     // 1. Intercept fetch
     if (typeof window.fetch === 'function') {
@@ -65,6 +74,7 @@ class NetworkErrorCollector {
           throw err
         }
       }
+      this.wrappedFetch = window.fetch
     }
 
     // 2. Intercept XMLHttpRequest
@@ -110,6 +120,8 @@ class NetworkErrorCollector {
 
         return originalXhrSend.apply(this, args)
       }
+      this.wrappedXhrOpen = XMLHttpRequest.prototype.open
+      this.wrappedXhrSend = XMLHttpRequest.prototype.send
     }
   }
 
@@ -133,18 +145,30 @@ class NetworkErrorCollector {
       return
     }
 
-    if (this.originalFetch) {
+    if (this.subscribers > 1) {
+      this.subscribers -= 1
+      return
+    }
+
+    if (this.originalFetch && window.fetch === this.wrappedFetch) {
       window.fetch = this.originalFetch
     }
-    if (this.originalXhrOpen) {
+    if (this.originalXhrOpen && XMLHttpRequest.prototype.open === this.wrappedXhrOpen) {
       XMLHttpRequest.prototype.open = this.originalXhrOpen
     }
-    if (this.originalXhrSend) {
+    if (this.originalXhrSend && XMLHttpRequest.prototype.send === this.wrappedXhrSend) {
       XMLHttpRequest.prototype.send = this.originalXhrSend
     }
 
     this.buffer = []
     this.installed = false
+    this.subscribers = 0
+    this.originalFetch = null
+    this.originalXhrOpen = null
+    this.originalXhrSend = null
+    this.wrappedFetch = null
+    this.wrappedXhrOpen = null
+    this.wrappedXhrSend = null
   }
 }
 

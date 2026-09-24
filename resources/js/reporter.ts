@@ -1,22 +1,21 @@
 import { prepareAttachments } from './attachments'
-import { captureScreenshot } from './capture'
 import { collectDiagnosticContext } from './context'
 import { breadcrumbsCollector } from './diagnostics/breadcrumbs'
 import { consoleCollector } from './diagnostics/console'
 import { errorCollector } from './diagnostics/errors'
 import { networkErrorCollector } from './diagnostics/network'
-import { AvailabilityError, CaptureError } from './errors'
+import { AvailabilityError } from './errors'
 import { checkAvailability, sendFeedbackReport } from './transport'
 import type {
-  CaptureOptions,
   DiagnosticContext,
-  FeedbackAttachmentInput,
   FeedbackReporterConfig,
   FeedbackReportOptions,
   FeedbackSubmitResponse,
 } from './types'
 
 export class FeedbackReporter {
+  private readonly activeDiagnostics = new Set<'errors' | 'console' | 'network' | 'breadcrumbs'>()
+
   constructor(private readonly config: FeedbackReporterConfig = {}) {
     if (this.config.diagnostics) {
       this.initDiagnostics()
@@ -29,50 +28,40 @@ export class FeedbackReporter {
       return
     }
 
-    if (diag.errors !== false) {
+    if (diag.errors && !this.activeDiagnostics.has('errors')) {
       const max = typeof diag.errors === 'object' ? diag.errors.maxEntries : 20
       errorCollector.init(max)
+      this.activeDiagnostics.add('errors')
     }
 
-    if (diag.console) {
+    if (diag.console && !this.activeDiagnostics.has('console')) {
       const max = typeof diag.console === 'object' ? diag.console.maxEntries : 20
       consoleCollector.init(max)
+      this.activeDiagnostics.add('console')
     }
 
-    if (diag.network) {
+    if (diag.network && !this.activeDiagnostics.has('network')) {
       const max = typeof diag.network === 'object' ? diag.network.maxEntries : 20
       networkErrorCollector.init(max)
+      this.activeDiagnostics.add('network')
     }
 
-    if (diag.breadcrumbs) {
+    if (diag.breadcrumbs && !this.activeDiagnostics.has('breadcrumbs')) {
       const max = typeof diag.breadcrumbs === 'object' ? diag.breadcrumbs.maxEntries : 50
       breadcrumbsCollector.init(max)
+      this.activeDiagnostics.add('breadcrumbs')
     }
   }
 
   public destroyDiagnostics(): void {
-    errorCollector.destroy()
-    consoleCollector.destroy()
-    networkErrorCollector.destroy()
-    breadcrumbsCollector.destroy()
+    if (this.activeDiagnostics.delete('errors')) errorCollector.destroy()
+    if (this.activeDiagnostics.delete('console')) consoleCollector.destroy()
+    if (this.activeDiagnostics.delete('network')) networkErrorCollector.destroy()
+    if (this.activeDiagnostics.delete('breadcrumbs')) breadcrumbsCollector.destroy()
   }
 
   public async isAvailable(signal?: AbortSignal): Promise<boolean> {
     return checkAvailability(this.config, signal)
-  }
-
-  public async capture(options?: CaptureOptions): Promise<Blob> {
-    const merged = { ...this.config.capture, ...options }
-    this.config.callbacks?.onCaptureStart?.()
-
-    try {
-      const blob = await captureScreenshot(merged)
-      this.config.callbacks?.onCaptureSuccess?.(blob)
-      return blob
-    } catch (err) {
-      this.config.callbacks?.onCaptureError?.(err)
-      throw err
-    }
   }
 
   public async collectContext(): Promise<DiagnosticContext> {
@@ -97,9 +86,7 @@ export class FeedbackReporter {
     formData.append('client_report_id', clientReportId)
 
     // 2. Message
-    if (options.message) {
-      formData.append('message', options.message)
-    }
+    formData.append('message', options.message)
 
     // 3. Attachments
     preparedAttachments.forEach((att, index) => {
@@ -161,7 +148,7 @@ export class FeedbackReporter {
     }
   }
 
-  public async report(options: FeedbackReportOptions = {}): Promise<FeedbackSubmitResponse> {
+  public async report(options: FeedbackReportOptions): Promise<FeedbackSubmitResponse> {
     const signal = options.signal
 
     // 1. Check availability
@@ -170,47 +157,7 @@ export class FeedbackReporter {
       throw new AvailabilityError('Feedback reporter is currently unavailable.')
     }
 
-    const attachments: FeedbackAttachmentInput[] = [...(options.attachments || [])]
-    const captureOpts = { ...this.config.capture }
-    let captureMetadata: Record<string, unknown> = { attempted: false }
-
-    // 2. Automatic Capture
-    if (captureOpts.enabled !== false) {
-      captureMetadata = { attempted: true }
-      try {
-        const screenshotBlob = await this.capture(captureOpts)
-        attachments.unshift({
-          file: screenshotBlob,
-          source: 'automatic_capture',
-        })
-        captureMetadata.success = true
-      } catch (err) {
-        captureMetadata.success = false
-        captureMetadata.error_type = err instanceof CaptureError ? 'CaptureError' : 'UnknownError'
-
-        if (captureOpts.captureFailure === 'throw') {
-          throw err
-        }
-        // When 'continue', proceed with user attachments / message
-      }
-    }
-
-    // Merge captureMetadata into options
-    const reportOptions: FeedbackReportOptions = {
-      ...options,
-      attachments,
-      metadata: async () => {
-        const existingMeta =
-          typeof options.metadata === 'function' ? await options.metadata() : options.metadata || {}
-        return {
-          ...existingMeta,
-          capture: captureMetadata,
-        }
-      },
-    }
-
-    // 3. Submit
-    return this.submit(reportOptions)
+    return this.submit(options)
   }
 }
 

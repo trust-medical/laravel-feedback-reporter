@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'resources/js/index.ts',
     alpine: 'resources/js/alpine.ts',
+    widget: 'resources/js/widget.ts',
   },
   format: ['esm'],
   dts: true,

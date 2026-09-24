@@ -1,72 +1,67 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CaptureError } from '../resources/js/errors'
 import { createFeedbackReporter } from '../resources/js/reporter'
 
 describe('FeedbackReporter SDK', () => {
-  beforeEach(() => {
-    vi.restoreAllMocks()
-  })
+  beforeEach(() => vi.restoreAllMocks())
+  afterEach(() => vi.restoreAllMocks())
 
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('checks availability against server endpoint', async () => {
+  it('checks availability against the configured endpoint', async () => {
     const fetchMock = vi
       .spyOn(window, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ available: true }), { status: 200 }))
+    const reporter = createFeedbackReporter({ availabilityEndpoint: '/custom-availability' })
 
-    const reporter = createFeedbackReporter({
-      availabilityEndpoint: '/custom-avail',
-    })
+    const available = await reporter.isAvailable()
 
-    const isAvail = await reporter.isAvailable()
-    expect(isAvail).toBe(true)
+    expect(available).toBe(true)
     expect(fetchMock).toHaveBeenCalledWith(
-      '/custom-avail',
+      '/custom-availability',
       expect.objectContaining({ method: 'GET' }),
     )
   })
 
-  it('continues report submission when automatic capture fails if captureFailure is continue', async () => {
-    // 1. Availability check
-    vi.spyOn(window, 'fetch')
+  it('reports with only user-provided attachments and no capture metadata', async () => {
+    const fetchMock = vi
+      .spyOn(window, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify({ available: true }), { status: 200 }))
-      // 2. Submit check
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ id: '01J8ABCDEF', success: true }), { status: 201 }),
       )
-
     const reporter = createFeedbackReporter({
-      capture: {
-        captureFailure: 'continue',
-      },
+      endpoint: '/feedback',
+      availabilityEndpoint: '/availability',
     })
-
-    // Mock capture to throw CaptureError
-    vi.spyOn(reporter, 'capture').mockRejectedValueOnce(new CaptureError('DOM snapshot failed'))
+    const screenshot = new File(['image'], 'screen.png', { type: 'image/png' })
 
     const result = await reporter.report({
-      message: 'Bug report with failed capture',
+      message: 'The button is misaligned.',
+      attachments: [{ file: screenshot, source: 'user_screenshot' }],
     })
 
-    expect(result.id).toBe('01J8ABCDEF')
-    expect(result.success).toBe(true)
+    expect(result).toEqual({ id: '01J8ABCDEF', success: true })
+    const request = fetchMock.mock.calls[1]?.[1]
+    const formData = request?.body as FormData
+    expect(formData.get('attachments[0][source]')).toBe('user_screenshot')
+    expect(formData.get('report_metadata')).toBeNull()
+    expect(JSON.parse(String(formData.get('metadata')))).not.toHaveProperty('capture')
   })
 
-  it('throws error when automatic capture fails and captureFailure is throw', async () => {
-    vi.spyOn(window, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({ available: true }), { status: 200 }),
-    )
+  it('does not replace browser globals unless invasive diagnostics are enabled', () => {
+    const originalFetch = window.fetch
+    const originalConsoleError = console.error
+    const originalConsoleWarn = console.warn
+    const originalXhrOpen = XMLHttpRequest.prototype.open
+    const originalXhrSend = XMLHttpRequest.prototype.send
+    const originalOnError = window.onerror
 
-    const reporter = createFeedbackReporter({
-      capture: {
-        captureFailure: 'throw',
-      },
-    })
+    const reporter = createFeedbackReporter()
 
-    vi.spyOn(reporter, 'capture').mockRejectedValueOnce(new CaptureError('DOM snapshot failed'))
-
-    await expect(reporter.report({ message: 'Will fail' })).rejects.toThrow(CaptureError)
+    expect(window.fetch).toBe(originalFetch)
+    expect(console.error).toBe(originalConsoleError)
+    expect(console.warn).toBe(originalConsoleWarn)
+    expect(XMLHttpRequest.prototype.open).toBe(originalXhrOpen)
+    expect(XMLHttpRequest.prototype.send).toBe(originalXhrSend)
+    expect(window.onerror).toBe(originalOnError)
+    reporter.destroyDiagnostics()
   })
 })

@@ -36,6 +36,7 @@ it('rejects upload with an oversized individual file', function () {
     $oversizedFile = UploadedFile::fake()->create('large.png', 6000, 'image/png');
 
     $response = $this->post(route('feedback-reporter.store'), [
+        'message' => 'Oversized file test',
         'attachments' => [
             ['file' => $oversizedFile, 'source' => AttachmentSource::Attachment->value],
         ],
@@ -56,6 +57,7 @@ it('rejects upload exceeding total attachment size limit', function () {
     }
 
     $response = $this->post(route('feedback-reporter.store'), [
+        'message' => 'Total file size test',
         'attachments' => $files,
     ], ['Accept' => 'application/json']);
 
@@ -67,6 +69,7 @@ it('rejects SVG images due to XSS protection', function () {
     $svgFile = UploadedFile::fake()->create('exploit.svg', 10, 'image/svg+xml');
 
     $response = $this->post(route('feedback-reporter.store'), [
+        'message' => 'SVG validation test',
         'attachments' => [
             ['file' => $svgFile, 'source' => AttachmentSource::Attachment->value],
         ],
@@ -80,8 +83,9 @@ it('stores attachments with date and ULID partition in safe storage path', funct
     $file = UploadedFile::fake()->image('my_screenshot.png', 640, 480);
 
     $response = $this->post(route('feedback-reporter.store'), [
+        'message' => 'Screenshot storage test',
         'attachments' => [
-            ['file' => $file, 'source' => AttachmentSource::AutomaticCapture->value],
+            ['file' => $file, 'source' => AttachmentSource::UserScreenshot->value],
         ],
     ]);
 

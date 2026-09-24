@@ -1,21 +1,9 @@
-export type FeedbackImageSource = 'automatic_capture' | 'user_screenshot' | 'attachment'
+export type FeedbackImageSource = 'user_screenshot' | 'attachment'
 
 export interface FeedbackAttachmentInput {
   file: File | Blob
   source: FeedbackImageSource
   filename?: string
-}
-
-export interface CaptureOptions {
-  enabled?: boolean
-  renderer?: 'html-to-image' | 'html2canvas'
-  target?: HTMLElement | (() => HTMLElement | null) | null
-  pixelRatio?: number
-  quality?: number
-  backgroundColor?: string | null
-  cacheBust?: boolean
-  filter?: (node: HTMLElement) => boolean
-  captureFailure?: 'continue' | 'throw'
 }
 
 export interface UrlSanitizationOptions {
@@ -45,9 +33,6 @@ export interface FeedbackSubmitResponse {
 }
 
 export interface FeedbackReporterCallbacks {
-  onCaptureStart?: () => void
-  onCaptureSuccess?: (blob: Blob) => void
-  onCaptureError?: (error: unknown) => void
   onContextCollected?: (context: Record<string, unknown>) => void
   onSubmitStart?: () => void
   onSubmitSuccess?: (response: FeedbackSubmitResponse) => void
@@ -61,7 +46,6 @@ export interface FeedbackReporterConfig {
   headers?:
     | Record<string, string>
     | (() => Record<string, string> | Promise<Record<string, string>>)
-  capture?: CaptureOptions
   url?: UrlSanitizationOptions
   storage?: StorageOptions
   metadata?:
@@ -72,7 +56,7 @@ export interface FeedbackReporterConfig {
 }
 
 export interface FeedbackReportOptions {
-  message?: string
+  message: string
   attachments?: FeedbackAttachmentInput[]
   metadata?:
     | Record<string, unknown>
@@ -93,6 +77,5 @@ export interface DiagnosticContext {
   console?: unknown[]
   network_errors?: unknown[]
   breadcrumbs?: unknown[]
-  capture?: Record<string, unknown>
   application?: Record<string, unknown>
 }

@@ -1,6 +1,3 @@
-import { toBlob } from 'html-to-image';
-import html2canvas from 'html2canvas-pro';
-
 // resources/js/errors.ts
 var FeedbackReporterError = class extends Error {
   constructor(message) {
@@ -16,14 +13,6 @@ var AvailabilityError = class extends FeedbackReporterError {
     this.name = "AvailabilityError";
   }
   statusCode;
-};
-var CaptureError = class extends FeedbackReporterError {
-  constructor(message, originalError) {
-    super(message);
-    this.originalError = originalError;
-    this.name = "CaptureError";
-  }
-  originalError;
 };
 var AttachmentValidationError = class extends FeedbackReporterError {
   constructor(message) {
@@ -100,101 +89,6 @@ function prepareAttachments(rawAttachments, maxFiles = 5, maxFileSize = 5 * 1024
     };
   });
 }
-async function captureWithHtml2Canvas(target, filter, options) {
-  const canvas = await html2canvas(target, {
-    allowTaint: false,
-    backgroundColor: options?.backgroundColor ?? "#ffffff",
-    ignoreElements: (element) => !filter(element),
-    logging: false,
-    scale: options?.pixelRatio ?? 1,
-    useCORS: false
-  });
-  return new Promise((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (blob) {
-          resolve(blob);
-          return;
-        }
-        reject(new CaptureError("Failed to generate image blob from target."));
-      },
-      "image/png",
-      options?.quality ?? 0.92
-    );
-  });
-}
-async function captureScreenshot(options) {
-  const target = typeof options?.target === "function" ? options.target() : options?.target || document.documentElement;
-  if (!target) {
-    throw new CaptureError("No capture target element found.");
-  }
-  const redactedItems = [];
-  try {
-    const redactElements = target.querySelectorAll("[data-feedback-redact]");
-    for (const el of Array.from(redactElements)) {
-      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-        redactedItems.push({
-          element: el,
-          originalValue: el.value
-        });
-        el.value = "\u2588".repeat(Math.max(el.value.length, 8));
-      } else {
-        redactedItems.push({
-          element: el,
-          originalText: el.textContent || ""
-        });
-        el.textContent = "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588";
-      }
-    }
-    const filter = (node) => {
-      if (!node || !node.getAttribute) {
-        return true;
-      }
-      if (node.hasAttribute("data-feedback-ignore") || node.closest?.("[data-feedback-ignore]")) {
-        return false;
-      }
-      if (node instanceof HTMLInputElement && node.type === "password") {
-        return false;
-      }
-      if (options?.filter) {
-        return options.filter(node);
-      }
-      return true;
-    };
-    const blob = options?.renderer === "html2canvas" ? await captureWithHtml2Canvas(target, filter, options) : await toBlob(target, {
-      pixelRatio: options?.pixelRatio ?? 1,
-      quality: options?.quality ?? 0.92,
-      backgroundColor: options?.backgroundColor ?? "#ffffff",
-      cacheBust: options?.cacheBust ?? true,
-      filter
-    });
-    if (!blob) {
-      throw new CaptureError("Failed to generate image blob from target.");
-    }
-    return blob;
-  } catch (err) {
-    if (err instanceof CaptureError) {
-      throw err;
-    }
-    throw new CaptureError(
-      `Screenshot capture failed: ${err instanceof Error ? err.message : String(err)}`,
-      err
-    );
-  } finally {
-    for (const item of redactedItems) {
-      try {
-        if (item.originalValue !== void 0 && "value" in item.element) {
-          ;
-          item.element.value = item.originalValue;
-        }
-        if (item.originalText !== void 0) {
-          item.element.textContent = item.originalText;
-        }
-      } catch {
-      }
-    }
-  }
-}
 
 // resources/js/sanitizer.ts
 function sanitizeUrl(rawUrl, options) {
@@ -234,18 +128,24 @@ var BreadcrumbsCollector = class {
   buffer = [];
   maxEntries = 50;
   installed = false;
+  subscribers = 0;
   clickHandler = null;
   submitHandler = null;
   popstateHandler = null;
   init(maxEntries = 50) {
-    if (this.installed || typeof window === "undefined") {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (this.installed) {
+      this.subscribers += 1;
       return;
     }
     this.maxEntries = maxEntries;
     this.installed = true;
+    this.subscribers = 1;
     this.clickHandler = (e) => {
       const target = e.target;
-      if (!target || !target.tagName) {
+      if (!target?.tagName) {
         return;
       }
       if (target instanceof HTMLInputElement && (target.type === "password" || target.getAttribute("autocomplete")?.includes("password"))) {
@@ -264,7 +164,7 @@ var BreadcrumbsCollector = class {
     document.addEventListener("click", this.clickHandler, true);
     this.submitHandler = (e) => {
       const target = e.target;
-      if (!target || !target.tagName) {
+      if (!target?.tagName) {
         return;
       }
       const id = target.id || void 0;
@@ -302,6 +202,10 @@ var BreadcrumbsCollector = class {
     if (!this.installed || typeof window === "undefined") {
       return;
     }
+    if (this.subscribers > 1) {
+      this.subscribers -= 1;
+      return;
+    }
     if (this.clickHandler) {
       document.removeEventListener("click", this.clickHandler, true);
     }
@@ -313,6 +217,10 @@ var BreadcrumbsCollector = class {
     }
     this.buffer = [];
     this.installed = false;
+    this.subscribers = 0;
+    this.clickHandler = null;
+    this.submitHandler = null;
+    this.popstateHandler = null;
   }
 };
 var breadcrumbsCollector = new BreadcrumbsCollector();
@@ -322,24 +230,34 @@ var ConsoleCollector = class {
   buffer = [];
   maxEntries = 20;
   installed = false;
+  subscribers = 0;
+  wrappedError = null;
+  wrappedWarn = null;
   originalError = null;
   originalWarn = null;
   init(maxEntries = 20) {
-    if (this.installed || typeof console === "undefined") {
+    if (typeof console === "undefined") {
+      return;
+    }
+    if (this.installed) {
+      this.subscribers += 1;
       return;
     }
     this.maxEntries = maxEntries;
     this.installed = true;
+    this.subscribers = 1;
     this.originalError = console.error;
     this.originalWarn = console.warn;
-    console.error = (...args) => {
+    this.wrappedError = (...args) => {
       this.add("error", args);
       this.originalError?.apply(console, args);
     };
-    console.warn = (...args) => {
+    console.error = this.wrappedError;
+    this.wrappedWarn = (...args) => {
       this.add("warn", args);
       this.originalWarn?.apply(console, args);
     };
+    console.warn = this.wrappedWarn;
   }
   add(level, args) {
     const messages = args.map((arg) => {
@@ -374,14 +292,23 @@ var ConsoleCollector = class {
     if (!this.installed || typeof console === "undefined") {
       return;
     }
-    if (this.originalError) {
+    if (this.subscribers > 1) {
+      this.subscribers -= 1;
+      return;
+    }
+    if (this.originalError && console.error === this.wrappedError) {
       console.error = this.originalError;
     }
-    if (this.originalWarn) {
+    if (this.originalWarn && console.warn === this.wrappedWarn) {
       console.warn = this.originalWarn;
     }
     this.buffer = [];
     this.installed = false;
+    this.subscribers = 0;
+    this.originalError = null;
+    this.originalWarn = null;
+    this.wrappedError = null;
+    this.wrappedWarn = null;
   }
 };
 var consoleCollector = new ConsoleCollector();
@@ -391,30 +318,32 @@ var ErrorCollector = class {
   buffer = [];
   maxEntries = 20;
   installed = false;
-  originalOnError = null;
+  subscribers = 0;
+  errorHandler = null;
   rejectionHandler = null;
   init(maxEntries = 20) {
-    if (this.installed || typeof window === "undefined") {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (this.installed) {
+      this.subscribers += 1;
       return;
     }
     this.maxEntries = maxEntries;
     this.installed = true;
-    this.originalOnError = window.onerror;
-    window.onerror = (message, source, lineno, colno, error) => {
+    this.subscribers = 1;
+    this.errorHandler = (event) => {
       this.add({
         type: "error",
-        message: truncateString(String(message), 500),
-        source: source ? truncateString(String(source), 255) : void 0,
-        lineno,
-        colno,
-        stack: error?.stack ? truncateString(error.stack, 2e3) : void 0,
+        message: truncateString(event.message, 500),
+        source: event.filename ? truncateString(event.filename, 255) : void 0,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error?.stack ? truncateString(event.error.stack, 2e3) : void 0,
         timestamp: (/* @__PURE__ */ new Date()).toISOString()
       });
-      if (typeof this.originalOnError === "function") {
-        return this.originalOnError(message, source, lineno, colno, error);
-      }
-      return false;
     };
+    window.addEventListener("error", this.errorHandler);
     this.rejectionHandler = (event) => {
       const reason = event.reason;
       const message = reason instanceof Error ? reason.message : String(reason);
@@ -444,12 +373,21 @@ var ErrorCollector = class {
     if (!this.installed || typeof window === "undefined") {
       return;
     }
-    window.onerror = this.originalOnError;
+    if (this.subscribers > 1) {
+      this.subscribers -= 1;
+      return;
+    }
+    if (this.errorHandler) {
+      window.removeEventListener("error", this.errorHandler);
+    }
     if (this.rejectionHandler) {
       window.removeEventListener("unhandledrejection", this.rejectionHandler);
     }
     this.buffer = [];
     this.installed = false;
+    this.subscribers = 0;
+    this.errorHandler = null;
+    this.rejectionHandler = null;
   }
 };
 var errorCollector = new ErrorCollector();
@@ -459,15 +397,24 @@ var NetworkErrorCollector = class {
   buffer = [];
   maxEntries = 20;
   installed = false;
+  subscribers = 0;
+  wrappedFetch = null;
+  wrappedXhrOpen = null;
+  wrappedXhrSend = null;
   originalFetch = null;
   originalXhrOpen = null;
   originalXhrSend = null;
   init(maxEntries = 20) {
-    if (this.installed || typeof window === "undefined") {
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (this.installed) {
+      this.subscribers += 1;
       return;
     }
     this.maxEntries = maxEntries;
     this.installed = true;
+    this.subscribers = 1;
     if (typeof window.fetch === "function") {
       const originalFetch = window.fetch;
       this.originalFetch = originalFetch;
@@ -500,6 +447,7 @@ var NetworkErrorCollector = class {
           throw err;
         }
       };
+      this.wrappedFetch = window.fetch;
     }
     if (typeof XMLHttpRequest !== "undefined") {
       const originalXhrOpen = XMLHttpRequest.prototype.open;
@@ -528,6 +476,8 @@ var NetworkErrorCollector = class {
         });
         return originalXhrSend.apply(this, args);
       };
+      this.wrappedXhrOpen = XMLHttpRequest.prototype.open;
+      this.wrappedXhrSend = XMLHttpRequest.prototype.send;
     }
   }
   add(item) {
@@ -546,17 +496,28 @@ var NetworkErrorCollector = class {
     if (!this.installed || typeof window === "undefined") {
       return;
     }
-    if (this.originalFetch) {
+    if (this.subscribers > 1) {
+      this.subscribers -= 1;
+      return;
+    }
+    if (this.originalFetch && window.fetch === this.wrappedFetch) {
       window.fetch = this.originalFetch;
     }
-    if (this.originalXhrOpen) {
+    if (this.originalXhrOpen && XMLHttpRequest.prototype.open === this.wrappedXhrOpen) {
       XMLHttpRequest.prototype.open = this.originalXhrOpen;
     }
-    if (this.originalXhrSend) {
+    if (this.originalXhrSend && XMLHttpRequest.prototype.send === this.wrappedXhrSend) {
       XMLHttpRequest.prototype.send = this.originalXhrSend;
     }
     this.buffer = [];
     this.installed = false;
+    this.subscribers = 0;
+    this.originalFetch = null;
+    this.originalXhrOpen = null;
+    this.originalXhrSend = null;
+    this.wrappedFetch = null;
+    this.wrappedXhrOpen = null;
+    this.wrappedXhrSend = null;
   }
 };
 var networkErrorCollector = new NetworkErrorCollector();
@@ -826,48 +787,41 @@ var FeedbackReporter = class {
     }
   }
   config;
+  activeDiagnostics = /* @__PURE__ */ new Set();
   initDiagnostics() {
     const diag = this.config.diagnostics;
     if (!diag) {
       return;
     }
-    if (diag.errors !== false) {
+    if (diag.errors && !this.activeDiagnostics.has("errors")) {
       const max = typeof diag.errors === "object" ? diag.errors.maxEntries : 20;
       errorCollector.init(max);
+      this.activeDiagnostics.add("errors");
     }
-    if (diag.console) {
+    if (diag.console && !this.activeDiagnostics.has("console")) {
       const max = typeof diag.console === "object" ? diag.console.maxEntries : 20;
       consoleCollector.init(max);
+      this.activeDiagnostics.add("console");
     }
-    if (diag.network) {
+    if (diag.network && !this.activeDiagnostics.has("network")) {
       const max = typeof diag.network === "object" ? diag.network.maxEntries : 20;
       networkErrorCollector.init(max);
+      this.activeDiagnostics.add("network");
     }
-    if (diag.breadcrumbs) {
+    if (diag.breadcrumbs && !this.activeDiagnostics.has("breadcrumbs")) {
       const max = typeof diag.breadcrumbs === "object" ? diag.breadcrumbs.maxEntries : 50;
       breadcrumbsCollector.init(max);
+      this.activeDiagnostics.add("breadcrumbs");
     }
   }
   destroyDiagnostics() {
-    errorCollector.destroy();
-    consoleCollector.destroy();
-    networkErrorCollector.destroy();
-    breadcrumbsCollector.destroy();
+    if (this.activeDiagnostics.delete("errors")) errorCollector.destroy();
+    if (this.activeDiagnostics.delete("console")) consoleCollector.destroy();
+    if (this.activeDiagnostics.delete("network")) networkErrorCollector.destroy();
+    if (this.activeDiagnostics.delete("breadcrumbs")) breadcrumbsCollector.destroy();
   }
   async isAvailable(signal) {
     return checkAvailability(this.config, signal);
-  }
-  async capture(options) {
-    const merged = { ...this.config.capture, ...options };
-    this.config.callbacks?.onCaptureStart?.();
-    try {
-      const blob = await captureScreenshot(merged);
-      this.config.callbacks?.onCaptureSuccess?.(blob);
-      return blob;
-    } catch (err) {
-      this.config.callbacks?.onCaptureError?.(err);
-      throw err;
-    }
   }
   async collectContext() {
     const ctx = await collectDiagnosticContext(this.config);
@@ -881,9 +835,7 @@ var FeedbackReporter = class {
     const formData = new FormData();
     const clientReportId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     formData.append("client_report_id", clientReportId);
-    if (options.message) {
-      formData.append("message", options.message);
-    }
+    formData.append("message", options.message);
     preparedAttachments.forEach((att, index) => {
       formData.append(`attachments[${index}][file]`, att.file, att.filename);
       formData.append(`attachments[${index}][source]`, att.source);
@@ -931,50 +883,19 @@ var FeedbackReporter = class {
       throw err;
     }
   }
-  async report(options = {}) {
+  async report(options) {
     const signal = options.signal;
     const available = await this.isAvailable(signal);
     if (!available) {
       throw new AvailabilityError("Feedback reporter is currently unavailable.");
     }
-    const attachments = [...options.attachments || []];
-    const captureOpts = { ...this.config.capture };
-    let captureMetadata = { attempted: false };
-    if (captureOpts.enabled !== false) {
-      captureMetadata = { attempted: true };
-      try {
-        const screenshotBlob = await this.capture(captureOpts);
-        attachments.unshift({
-          file: screenshotBlob,
-          source: "automatic_capture"
-        });
-        captureMetadata.success = true;
-      } catch (err) {
-        captureMetadata.success = false;
-        captureMetadata.error_type = err instanceof CaptureError ? "CaptureError" : "UnknownError";
-        if (captureOpts.captureFailure === "throw") {
-          throw err;
-        }
-      }
-    }
-    const reportOptions = {
-      ...options,
-      attachments,
-      metadata: async () => {
-        const existingMeta = typeof options.metadata === "function" ? await options.metadata() : options.metadata || {};
-        return {
-          ...existingMeta,
-          capture: captureMetadata
-        };
-      }
-    };
-    return this.submit(reportOptions);
+    return this.submit(options);
   }
 };
 function createFeedbackReporter(config) {
   return new FeedbackReporter(config);
 }
 
-export { AttachmentValidationError, AvailabilityError, CaptureError, FeedbackReporter, FeedbackReporterError, RateLimitError, ServerError, TransportError, ValidationError, breadcrumbsCollector, captureScreenshot, checkAvailability, collectDiagnosticContext, consoleCollector, createFeedbackReporter, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString };
-//# sourceMappingURL=chunk-64FRY6BH.js.map
-//# sourceMappingURL=chunk-64FRY6BH.js.map
+export { AttachmentValidationError, AvailabilityError, FeedbackReporter, FeedbackReporterError, RateLimitError, ServerError, TransportError, ValidationError, breadcrumbsCollector, checkAvailability, collectDiagnosticContext, consoleCollector, createFeedbackReporter, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString };
+//# sourceMappingURL=chunk-C65TNJGS.js.map
+//# sourceMappingURL=chunk-C65TNJGS.js.map

@@ -14,34 +14,35 @@ class ErrorCollector {
   private buffer: CapturedErrorItem[] = []
   private maxEntries: number = 20
   private installed: boolean = false
-  private originalOnError: typeof window.onerror | null = null
+  private subscribers: number = 0
+  private errorHandler: ((event: ErrorEvent) => void) | null = null
   private rejectionHandler: ((event: PromiseRejectionEvent) => void) | null = null
 
   public init(maxEntries: number = 20): void {
-    if (this.installed || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
+      return
+    }
+    if (this.installed) {
+      this.subscribers += 1
       return
     }
 
     this.maxEntries = maxEntries
     this.installed = true
+    this.subscribers = 1
 
-    this.originalOnError = window.onerror
-    window.onerror = (message, source, lineno, colno, error) => {
+    this.errorHandler = (event: ErrorEvent) => {
       this.add({
         type: 'error',
-        message: truncateString(String(message), 500),
-        source: source ? truncateString(String(source), 255) : undefined,
-        lineno,
-        colno,
-        stack: error?.stack ? truncateString(error.stack, 2000) : undefined,
+        message: truncateString(event.message, 500),
+        source: event.filename ? truncateString(event.filename, 255) : undefined,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error?.stack ? truncateString(event.error.stack, 2000) : undefined,
         timestamp: new Date().toISOString(),
       })
-
-      if (typeof this.originalOnError === 'function') {
-        return this.originalOnError(message, source, lineno, colno, error)
-      }
-      return false
     }
+    window.addEventListener('error', this.errorHandler)
 
     this.rejectionHandler = (event: PromiseRejectionEvent) => {
       const reason = event.reason
@@ -80,13 +81,23 @@ class ErrorCollector {
       return
     }
 
-    window.onerror = this.originalOnError
+    if (this.subscribers > 1) {
+      this.subscribers -= 1
+      return
+    }
+
+    if (this.errorHandler) {
+      window.removeEventListener('error', this.errorHandler)
+    }
     if (this.rejectionHandler) {
       window.removeEventListener('unhandledrejection', this.rejectionHandler)
     }
 
     this.buffer = []
     this.installed = false
+    this.subscribers = 0
+    this.errorHandler = null
+    this.rejectionHandler = null
   }
 }
 

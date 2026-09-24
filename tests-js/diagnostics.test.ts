@@ -41,6 +41,38 @@ describe('diagnostics collectors', () => {
     spy.mockRestore()
   })
 
+  it('keeps shared console instrumentation until the last subscriber is destroyed', () => {
+    const original = console.error
+    consoleCollector.init(10)
+    const wrapper = console.error
+    consoleCollector.init(10)
+
+    consoleCollector.destroy()
+
+    expect(console.error).toBe(wrapper)
+    consoleCollector.destroy()
+    expect(console.error).toBe(original)
+  })
+
+  it('does not overwrite a console wrapper installed after its own wrapper', () => {
+    const original = console.error
+    consoleCollector.init(10)
+    const laterWrapper = (..._args: unknown[]) => undefined
+    console.error = laterWrapper
+
+    consoleCollector.destroy()
+
+    expect(console.error).toBe(laterWrapper)
+    console.error = original
+  })
+
+  it('observes errors without replacing window.onerror', () => {
+    const original = window.onerror
+    errorCollector.init(10)
+
+    expect(window.onerror).toBe(original)
+  })
+
   it('breadcrumbsCollector captures clicks safely without input values', () => {
     breadcrumbsCollector.init(10)
 

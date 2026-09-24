@@ -1,5 +1,6 @@
-import { b as FeedbackAttachmentInput, C as CaptureOptions, F as FeedbackReporterConfig, D as DiagnosticContext, U as UrlSanitizationOptions, c as FeedbackSubmitResponse } from './reporter-CZyfgOM4.js';
-export { d as DiagnosticsOptions, e as FeedbackImageSource, f as FeedbackReportOptions, a as FeedbackReporter, g as FeedbackReporterCallbacks, S as StorageOptions, h as createFeedbackReporter } from './reporter-CZyfgOM4.js';
+import { a as FeedbackAttachmentInput, F as FeedbackReporterConfig, D as DiagnosticContext, U as UrlSanitizationOptions, b as FeedbackSubmitResponse } from './types-C4xd_kpc.js';
+export { c as DiagnosticsOptions, d as FeedbackImageSource, e as FeedbackReportOptions, f as FeedbackReporterCallbacks, S as StorageOptions } from './types-C4xd_kpc.js';
+export { F as FeedbackReporter, c as createFeedbackReporter } from './reporter-Cp5XjEr6.js';
 
 interface PreparedAttachment {
     file: File | Blob;
@@ -7,8 +8,6 @@ interface PreparedAttachment {
     filename: string;
 }
 declare function prepareAttachments(rawAttachments?: FeedbackAttachmentInput[], maxFiles?: number, maxFileSize?: number): PreparedAttachment[];
-
-declare function captureScreenshot(options?: CaptureOptions): Promise<Blob>;
 
 declare function collectDiagnosticContext(config?: FeedbackReporterConfig): Promise<DiagnosticContext>;
 
@@ -22,6 +21,7 @@ declare class BreadcrumbsCollector {
     private buffer;
     private maxEntries;
     private installed;
+    private subscribers;
     private clickHandler;
     private submitHandler;
     private popstateHandler;
@@ -42,6 +42,9 @@ declare class ConsoleCollector {
     private buffer;
     private maxEntries;
     private installed;
+    private subscribers;
+    private wrappedError;
+    private wrappedWarn;
     private originalError;
     private originalWarn;
     init(maxEntries?: number): void;
@@ -65,7 +68,8 @@ declare class ErrorCollector {
     private buffer;
     private maxEntries;
     private installed;
-    private originalOnError;
+    private subscribers;
+    private errorHandler;
     private rejectionHandler;
     init(maxEntries?: number): void;
     add(item: CapturedErrorItem): void;
@@ -86,6 +90,10 @@ declare class NetworkErrorCollector {
     private buffer;
     private maxEntries;
     private installed;
+    private subscribers;
+    private wrappedFetch;
+    private wrappedXhrOpen;
+    private wrappedXhrSend;
     private originalFetch;
     private originalXhrOpen;
     private originalXhrSend;
@@ -105,10 +113,6 @@ declare class FeedbackReporterError extends Error {
 declare class AvailabilityError extends FeedbackReporterError {
     readonly statusCode: number;
     constructor(message?: string, statusCode?: number);
-}
-declare class CaptureError extends FeedbackReporterError {
-    readonly originalError?: unknown | undefined;
-    constructor(message: string, originalError?: unknown | undefined);
 }
 declare class AttachmentValidationError extends FeedbackReporterError {
     constructor(message: string);
@@ -136,4 +140,4 @@ declare function getCsrfToken(config?: FeedbackReporterConfig): string | null;
 declare function checkAvailability(config?: FeedbackReporterConfig, signal?: AbortSignal): Promise<boolean>;
 declare function sendFeedbackReport(formData: FormData, config?: FeedbackReporterConfig, signal?: AbortSignal): Promise<FeedbackSubmitResponse>;
 
-export { AttachmentValidationError, AvailabilityError, CaptureError, CaptureOptions, DiagnosticContext, FeedbackAttachmentInput, FeedbackReporterConfig, FeedbackReporterError, FeedbackSubmitResponse, RateLimitError, ServerError, TransportError, UrlSanitizationOptions, ValidationError, breadcrumbsCollector, captureScreenshot, checkAvailability, collectDiagnosticContext, consoleCollector, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString };
+export { AttachmentValidationError, AvailabilityError, DiagnosticContext, FeedbackAttachmentInput, FeedbackReporterConfig, FeedbackReporterError, FeedbackSubmitResponse, RateLimitError, ServerError, TransportError, UrlSanitizationOptions, ValidationError, breadcrumbsCollector, checkAvailability, collectDiagnosticContext, consoleCollector, errorCollector, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, sanitizeUrl, sendFeedbackReport, truncateString };

@@ -20,7 +20,7 @@ it('dispatches FeedbackStored event on successful report submission', function (
     $response = $this->post(route('feedback-reporter.store'), [
         'message' => 'Event test report',
         'attachments' => [
-            ['file' => $file, 'source' => AttachmentSource::AutomaticCapture->value],
+            ['file' => $file, 'source' => AttachmentSource::UserScreenshot->value],
         ],
     ]);
 
@@ -30,7 +30,7 @@ it('dispatches FeedbackStored event on successful report submission', function (
     Event::assertDispatched(FeedbackStored::class, function (FeedbackStored $event) use ($reportId) {
         return $event->feedback->id === $reportId
             && $event->feedback->attachments->count() === 1
-            && $event->feedback->attachments->first()->source === AttachmentSource::AutomaticCapture;
+            && $event->feedback->attachments->first()->source === AttachmentSource::UserScreenshot;
     });
 });
 

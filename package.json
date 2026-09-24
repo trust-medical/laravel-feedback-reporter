@@ -1,7 +1,7 @@
 {
   "name": "@trust-medical/feedback-reporter",
-  "version": "3.0.0",
-  "description": "Headless feedback reporter TypeScript SDK with automatic capture, attachments, and diagnostic context",
+  "version": "4.0.0",
+  "description": "Feedback reporter SDK with manual image uploads, an isolated Web Component, and diagnostic context",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,6 +15,10 @@
     "./alpine": {
       "import": "./dist/alpine.js",
       "types": "./dist/alpine.d.ts"
+    },
+    "./widget": {
+      "import": "./dist/widget.js",
+      "types": "./dist/widget.d.ts"
     }
   },
   "files": [
@@ -30,8 +34,7 @@
     "audit": "npm audit --audit-level=high"
   },
   "dependencies": {
-    "html-to-image": "^1.11.11",
-    "html2canvas-pro": "^2.4.4"
+    "konva": "^10.6.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.14",
