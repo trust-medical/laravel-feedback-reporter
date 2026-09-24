@@ -2,6 +2,13 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 4.2.0 - 2026-09-24
+
+### Changed
+- Removed the annotation clear-all and fit-to-view controls.
+- Renamed “Delete selection” to “Delete shape.”
+- Added inline Lucide icons to Move, Hand tool, Rectangle, Arrow, Undo, and Delete shape while retaining visible text labels.
+
 ## 4.1.0 - 2026-09-24
 
 ### Added
