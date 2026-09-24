@@ -78,7 +78,7 @@ var widgetStyles = `
     .thumbnail-remove:hover { background: var(--fbr-accent); }
     .editor { display: flex; min-height: 0; min-width: 0; flex-direction: column; gap: 1rem; overflow: hidden; padding: 1.5rem; }
     .editor-controls { display: grid; flex: none; gap: .5rem; }
-    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }
     .toolbar button, .footer-actions button { border: 1px solid var(--fbr-border); border-radius: .5rem; background: transparent; padding: .5rem .75rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
     .toolbar button { display: inline-flex; align-items: center; justify-content: center; gap: .375rem; }
     .toolbar-icon { width: 1rem; height: 1rem; flex: none; }

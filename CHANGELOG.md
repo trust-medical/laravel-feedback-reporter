@@ -2,6 +2,11 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 4.2.1 - 2026-09-24
+
+### Changed
+- Reduced the annotation toolbar gap to 4px for a more compact control layout.
+
 ## 4.2.0 - 2026-09-24
 
 ### Changed

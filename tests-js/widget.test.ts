@@ -140,6 +140,9 @@ describe('feedback reporter web component', () => {
     expect(root?.querySelector('[data-feedback-clear]')).toBeNull()
     expect(root?.querySelector('[data-feedback-fit-all]')).toBeNull()
     expect(root?.querySelectorAll('.toolbar-icon')).toHaveLength(6)
+    expect(root?.querySelector('style')?.textContent).toContain(
+      '.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }',
+    )
     for (const selector of [
       '[data-tool="move"]',
       '[data-tool="pan"]',
