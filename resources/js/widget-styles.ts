@@ -38,9 +38,9 @@ export const widgetStyles = `
     .launcher:focus-visible, button:focus-visible, textarea:focus-visible, .dropzone:focus-within { outline: 2px solid var(--fbr-accent); outline-offset: 2px; }
     .launcher:disabled { cursor: wait; opacity: .65; }
     .launcher svg { width: 1.25rem; height: 1.25rem; }
-    dialog { width: min(72rem, calc(100vw - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); margin: auto; padding: 0; overflow: hidden; border: 1px solid var(--fbr-border); border-radius: 1rem; background: var(--fbr-bg); color: var(--fbr-text); box-shadow: 0 25px 60px rgb(0 0 0 / 35%); }
+    dialog { width: min(72rem, calc(100vw - 2rem)); max-width: none; height: min(48rem, calc(100dvh - 2rem)); max-height: none; margin: auto; padding: 0; overflow: hidden; border: 1px solid var(--fbr-border); border-radius: 1rem; background: var(--fbr-bg); color: var(--fbr-text); box-shadow: 0 25px 60px rgb(0 0 0 / 35%); }
     dialog::backdrop { background: var(--fbr-overlay); }
-    form { display: flex; max-height: calc(100dvh - 2rem); flex-direction: column; }
+    form { display: flex; height: 100%; min-height: 0; flex-direction: column; }
     header, footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; padding: 1rem 1.5rem; border-color: var(--fbr-border); }
     header { border-bottom: 1px solid var(--fbr-border); }
     footer { align-items: center; border-top: 1px solid var(--fbr-border); }
@@ -64,11 +64,16 @@ export const widgetStyles = `
     .attachment-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; font-size: .875rem; font-weight: 600; }
     [data-feedback-count] { color: var(--fbr-muted); font-size: .75rem; font-weight: 400; }
     .thumbnails { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: .75rem; }
-    .thumbnail { position: relative; overflow: hidden; padding: 0; border: 0; border-radius: .5rem; background: var(--fbr-panel); cursor: pointer; }
+    .thumbnail { position: relative; min-width: 0; border-radius: .5rem; background: var(--fbr-panel); }
     .thumbnail[data-selected="true"] { outline: 2px solid var(--fbr-accent); }
+    .thumbnail-select { display: block; width: 100%; overflow: hidden; padding: 0; border: 0; border-radius: .5rem; background: transparent; cursor: pointer; }
     .thumbnail img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
     .thumbnail span { position: absolute; inset: auto 0 0; overflow: hidden; padding: .25rem .375rem; background: rgb(15 23 42 / 75%); color: #fff; font-size: .625rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-    .editor { display: flex; min-height: 32rem; min-width: 0; flex-direction: column; gap: 1rem; overflow: hidden; padding: 1.5rem; }
+    .thumbnail-remove { position: absolute; z-index: 1; inset: .25rem .25rem auto auto; display: grid; width: 1.75rem; height: 1.75rem; place-items: center; padding: 0; border: 1px solid rgb(255 255 255 / 65%); border-radius: 9999px; background: rgb(15 23 42 / 82%); color: #fff; font-size: 0; cursor: pointer; }
+    .thumbnail-remove::before { content: "×"; font-size: 1rem; line-height: 1; }
+    .thumbnail-remove:hover { background: var(--fbr-accent); }
+    .editor { display: flex; min-height: 0; min-width: 0; flex-direction: column; gap: 1rem; overflow: hidden; padding: 1.5rem; }
+    .editor-controls { display: grid; flex: none; gap: .5rem; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
     .toolbar button, .footer-actions button { border: 1px solid var(--fbr-border); border-radius: .5rem; background: transparent; padding: .5rem .75rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
     .toolbar button[aria-pressed="true"], .primary { border-color: var(--fbr-accent) !important; background: var(--fbr-accent) !important; color: #fff !important; }
@@ -77,8 +82,8 @@ export const widgetStyles = `
     .zoom { display: inline-flex; overflow: hidden; border: 1px solid var(--fbr-border); border-radius: .5rem; }
     .zoom button { border: 0; border-radius: 0; }
     .zoom output { min-width: 3.5rem; padding: .5rem; border-inline: 1px solid var(--fbr-border); color: var(--fbr-text); font-size: .75rem; font-weight: 700; text-align: center; }
-    .viewport { position: relative; min-height: 20rem; flex: 1; overflow: auto; border-radius: .75rem; background: var(--fbr-panel); padding: .75rem; scrollbar-gutter: stable; }
-    .viewport-inner { display: grid; min-width: 100%; min-height: 100%; place-items: center; }
+    .viewport { position: relative; min-width: 0; min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; border-radius: .75rem; background: var(--fbr-panel); padding: .75rem; scrollbar-gutter: stable; }
+    .viewport-inner { display: grid; width: max-content; min-width: 100%; height: max-content; min-height: 100%; place-items: center; }
     [data-feedback-empty] { max-width: 24rem; color: var(--fbr-muted); font-size: .875rem; line-height: 1.5rem; text-align: center; }
     .canvas-host { overflow: hidden; border-radius: .5rem; background: #fff; box-shadow: 0 12px 30px rgb(0 0 0 / 18%); }
     .help { margin: 0; font-size: .75rem; }
@@ -88,8 +93,7 @@ export const widgetStyles = `
     .footer-actions { display: flex; justify-content: flex-end; gap: .75rem; }
     .primary { padding-inline: 1.25rem !important; box-shadow: 0 8px 20px rgb(225 29 72 / 20%); }
     @media (max-width: 900px) {
-        dialog { width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
-        form { max-height: calc(100dvh - 1rem); }
+        dialog { width: calc(100vw - 1rem); height: calc(100dvh - 1rem); }
         .body { grid-template-columns: 1fr; overflow-y: auto; }
         .sidebar { overflow: visible; border-right: 0; border-bottom: 1px solid var(--fbr-border); }
         .editor { min-height: 32rem; overflow: visible; }

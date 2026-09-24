@@ -42,9 +42,9 @@ var widgetStyles = `
     .launcher:focus-visible, button:focus-visible, textarea:focus-visible, .dropzone:focus-within { outline: 2px solid var(--fbr-accent); outline-offset: 2px; }
     .launcher:disabled { cursor: wait; opacity: .65; }
     .launcher svg { width: 1.25rem; height: 1.25rem; }
-    dialog { width: min(72rem, calc(100vw - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); margin: auto; padding: 0; overflow: hidden; border: 1px solid var(--fbr-border); border-radius: 1rem; background: var(--fbr-bg); color: var(--fbr-text); box-shadow: 0 25px 60px rgb(0 0 0 / 35%); }
+    dialog { width: min(72rem, calc(100vw - 2rem)); max-width: none; height: min(48rem, calc(100dvh - 2rem)); max-height: none; margin: auto; padding: 0; overflow: hidden; border: 1px solid var(--fbr-border); border-radius: 1rem; background: var(--fbr-bg); color: var(--fbr-text); box-shadow: 0 25px 60px rgb(0 0 0 / 35%); }
     dialog::backdrop { background: var(--fbr-overlay); }
-    form { display: flex; max-height: calc(100dvh - 2rem); flex-direction: column; }
+    form { display: flex; height: 100%; min-height: 0; flex-direction: column; }
     header, footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.5rem; padding: 1rem 1.5rem; border-color: var(--fbr-border); }
     header { border-bottom: 1px solid var(--fbr-border); }
     footer { align-items: center; border-top: 1px solid var(--fbr-border); }
@@ -68,11 +68,16 @@ var widgetStyles = `
     .attachment-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; font-size: .875rem; font-weight: 600; }
     [data-feedback-count] { color: var(--fbr-muted); font-size: .75rem; font-weight: 400; }
     .thumbnails { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin-top: .75rem; }
-    .thumbnail { position: relative; overflow: hidden; padding: 0; border: 0; border-radius: .5rem; background: var(--fbr-panel); cursor: pointer; }
+    .thumbnail { position: relative; min-width: 0; border-radius: .5rem; background: var(--fbr-panel); }
     .thumbnail[data-selected="true"] { outline: 2px solid var(--fbr-accent); }
+    .thumbnail-select { display: block; width: 100%; overflow: hidden; padding: 0; border: 0; border-radius: .5rem; background: transparent; cursor: pointer; }
     .thumbnail img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
     .thumbnail span { position: absolute; inset: auto 0 0; overflow: hidden; padding: .25rem .375rem; background: rgb(15 23 42 / 75%); color: #fff; font-size: .625rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
-    .editor { display: flex; min-height: 32rem; min-width: 0; flex-direction: column; gap: 1rem; overflow: hidden; padding: 1.5rem; }
+    .thumbnail-remove { position: absolute; z-index: 1; inset: .25rem .25rem auto auto; display: grid; width: 1.75rem; height: 1.75rem; place-items: center; padding: 0; border: 1px solid rgb(255 255 255 / 65%); border-radius: 9999px; background: rgb(15 23 42 / 82%); color: #fff; font-size: 0; cursor: pointer; }
+    .thumbnail-remove::before { content: "\xD7"; font-size: 1rem; line-height: 1; }
+    .thumbnail-remove:hover { background: var(--fbr-accent); }
+    .editor { display: flex; min-height: 0; min-width: 0; flex-direction: column; gap: 1rem; overflow: hidden; padding: 1.5rem; }
+    .editor-controls { display: grid; flex: none; gap: .5rem; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
     .toolbar button, .footer-actions button { border: 1px solid var(--fbr-border); border-radius: .5rem; background: transparent; padding: .5rem .75rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
     .toolbar button[aria-pressed="true"], .primary { border-color: var(--fbr-accent) !important; background: var(--fbr-accent) !important; color: #fff !important; }
@@ -81,8 +86,8 @@ var widgetStyles = `
     .zoom { display: inline-flex; overflow: hidden; border: 1px solid var(--fbr-border); border-radius: .5rem; }
     .zoom button { border: 0; border-radius: 0; }
     .zoom output { min-width: 3.5rem; padding: .5rem; border-inline: 1px solid var(--fbr-border); color: var(--fbr-text); font-size: .75rem; font-weight: 700; text-align: center; }
-    .viewport { position: relative; min-height: 20rem; flex: 1; overflow: auto; border-radius: .75rem; background: var(--fbr-panel); padding: .75rem; scrollbar-gutter: stable; }
-    .viewport-inner { display: grid; min-width: 100%; min-height: 100%; place-items: center; }
+    .viewport { position: relative; min-width: 0; min-height: 0; flex: 1; overflow: auto; overscroll-behavior: contain; border-radius: .75rem; background: var(--fbr-panel); padding: .75rem; scrollbar-gutter: stable; }
+    .viewport-inner { display: grid; width: max-content; min-width: 100%; height: max-content; min-height: 100%; place-items: center; }
     [data-feedback-empty] { max-width: 24rem; color: var(--fbr-muted); font-size: .875rem; line-height: 1.5rem; text-align: center; }
     .canvas-host { overflow: hidden; border-radius: .5rem; background: #fff; box-shadow: 0 12px 30px rgb(0 0 0 / 18%); }
     .help { margin: 0; font-size: .75rem; }
@@ -92,8 +97,7 @@ var widgetStyles = `
     .footer-actions { display: flex; justify-content: flex-end; gap: .75rem; }
     .primary { padding-inline: 1.25rem !important; box-shadow: 0 8px 20px rgb(225 29 72 / 20%); }
     @media (max-width: 900px) {
-        dialog { width: calc(100vw - 1rem); max-height: calc(100dvh - 1rem); }
-        form { max-height: calc(100dvh - 1rem); }
+        dialog { width: calc(100vw - 1rem); height: calc(100dvh - 1rem); }
         .body { grid-template-columns: 1fr; overflow-y: auto; }
         .sidebar { overflow: visible; border-right: 0; border-bottom: 1px solid var(--fbr-border); }
         .editor { min-height: 32rem; overflow: visible; }
@@ -120,6 +124,7 @@ var ANNOTATION_STROKE = 4;
 var MIN_ZOOM = 0.5;
 var MAX_ZOOM = 2;
 var ZOOM_STEP = 0.25;
+var SUCCESS_CLOSE_DELAY = 1500;
 var WidgetController = class {
   constructor(root, config) {
     this.root = root;
@@ -185,14 +190,16 @@ var WidgetController = class {
   toolButtons;
   images = [];
   selectedImageId = null;
-  currentTool = "select";
+  currentTool = "move";
   stage = null;
   annotationLayer = null;
   transformer = null;
   selectedShape = null;
   drawingShape = null;
   drawingOrigin = null;
+  panOrigin = null;
   isSubmitting = false;
+  successCloseTimer = null;
   requireElement(selector) {
     const element = this.root.querySelector(selector);
     if (!element) {
@@ -231,21 +238,6 @@ var WidgetController = class {
     this.dropzone.addEventListener("drop", (event) => {
       if (event instanceof DragEvent) {
         void this.addFiles(event.dataTransfer?.files ?? null);
-      }
-    });
-    this.dialog.addEventListener("keydown", (event) => {
-      if (!this.dialog.open) {
-        return;
-      }
-      const target = event.target;
-      const isTextInput = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !isTextInput) {
-        event.preventDefault();
-        this.undo();
-      }
-      if ((event.key === "Delete" || event.key === "Backspace") && !isTextInput) {
-        event.preventDefault();
-        this.deleteSelectedShape();
       }
     });
   }
@@ -372,25 +364,49 @@ var WidgetController = class {
     this.thumbnails.replaceChildren();
     for (const item of this.images) {
       const fragment = this.thumbnailTemplate.content.cloneNode(true);
-      const button = fragment.querySelector("[data-feedback-thumbnail]");
+      const thumbnail = fragment.querySelector("[data-feedback-thumbnail]");
+      const selectButton = fragment.querySelector(
+        "[data-feedback-thumbnail-select]"
+      );
+      const removeButton = fragment.querySelector("[data-feedback-remove-image]");
       const image = fragment.querySelector("[data-thumbnail-image]");
       const label = fragment.querySelector("[data-thumbnail-label]");
-      if (!button || !image || !label) {
+      if (!thumbnail || !selectButton || !removeButton || !image || !label) {
         continue;
       }
-      button.dataset.selected = String(item.id === this.selectedImageId);
+      thumbnail.dataset.selected = String(item.id === this.selectedImageId);
       image.src = item.objectUrl;
       image.alt = item.filename;
       label.textContent = item.filename;
-      button.addEventListener("click", () => {
+      removeButton.setAttribute(
+        "aria-label",
+        this.config.labels.removeAttachment.replace("{filename}", item.filename)
+      );
+      selectButton.addEventListener("click", () => {
         this.selectedImageId = item.id;
         this.renderThumbnails();
         this.renderSelectedImage();
       });
+      removeButton.addEventListener("click", () => this.removeImage(item.id));
       this.thumbnails.append(fragment);
     }
     this.count.textContent = `${this.images.length} / ${MAX_FILES}`;
     this.updateControls();
+  }
+  removeImage(imageId) {
+    const index = this.images.findIndex((item) => item.id === imageId);
+    if (index === -1) {
+      return;
+    }
+    const [removed] = this.images.splice(index, 1);
+    if (removed) {
+      URL.revokeObjectURL(removed.objectUrl);
+    }
+    if (this.selectedImageId === imageId) {
+      this.selectedImageId = this.images[Math.min(index, this.images.length - 1)]?.id ?? null;
+      this.renderSelectedImage();
+    }
+    this.renderThumbnails();
   }
   renderSelectedImage() {
     this.destroyStage();
@@ -483,8 +499,21 @@ var WidgetController = class {
         this.bindShapeEvents(shape, item);
       }
     }
+    const renderPixelRatio = interactive ? this.getRenderPixelRatio(item) : 1;
+    backgroundLayer.getCanvas().setPixelRatio(renderPixelRatio);
+    annotationLayer.getCanvas().setPixelRatio(renderPixelRatio);
+    annotationLayer.getHitCanvas().setPixelRatio(renderPixelRatio);
+    backgroundLayer.draw();
     annotationLayer.draw();
     return { stage, annotationLayer, transformer };
+  }
+  getRenderPixelRatio(item) {
+    const sourcePixelRatio = Math.min(
+      item.naturalWidth / item.stageWidth,
+      item.naturalHeight / item.stageHeight
+    );
+    const targetPixelRatio = Math.max(window.devicePixelRatio || 1, MAX_ZOOM);
+    return Math.max(1, Math.min(sourcePixelRatio, targetPixelRatio));
   }
   createShape(annotation, interactive) {
     const attrs = { ...annotation.attrs, draggable: interactive, name: "annotation" };
@@ -495,7 +524,20 @@ var WidgetController = class {
       return;
     }
     this.stage.on("pointerdown", (event) => {
-      if (this.currentTool === "select") {
+      if (this.currentTool === "pan") {
+        const pointer = this.getClientPointer(event.evt);
+        if (pointer) {
+          event.evt.preventDefault();
+          this.panOrigin = {
+            ...pointer,
+            scrollLeft: this.canvasViewport.scrollLeft,
+            scrollTop: this.canvasViewport.scrollTop
+          };
+          this.updateStageCursor(true);
+        }
+        return;
+      }
+      if (this.currentTool === "move") {
         if (event.target === this.stage) {
           this.selectShape(null);
         }
@@ -528,7 +570,16 @@ var WidgetController = class {
       });
       this.annotationLayer?.add(this.drawingShape);
     });
-    this.stage.on("pointermove", () => {
+    this.stage.on("pointermove", (event) => {
+      if (this.panOrigin) {
+        const pointer = this.getClientPointer(event.evt);
+        if (pointer) {
+          event.evt.preventDefault();
+          this.canvasViewport.scrollLeft = this.panOrigin.scrollLeft - (pointer.clientX - this.panOrigin.clientX);
+          this.canvasViewport.scrollTop = this.panOrigin.scrollTop - (pointer.clientY - this.panOrigin.clientY);
+        }
+        return;
+      }
       if (!this.drawingShape || !this.drawingOrigin) {
         return;
       }
@@ -553,6 +604,11 @@ var WidgetController = class {
       }
     });
     this.stage.on("pointerup pointercancel", () => {
+      if (this.panOrigin) {
+        this.panOrigin = null;
+        this.updateStageCursor();
+        return;
+      }
       if (!this.drawingShape) {
         return;
       }
@@ -570,10 +626,16 @@ var WidgetController = class {
       this.annotationLayer?.draw();
     });
   }
+  getClientPointer(event) {
+    if (!("clientX" in event) || !("clientY" in event)) {
+      return null;
+    }
+    return { clientX: Number(event.clientX), clientY: Number(event.clientY) };
+  }
   bindShapeEvents(shape, item) {
     shape.on("click tap", (event) => {
       event.cancelBubble = true;
-      if (this.currentTool === "select") {
+      if (this.currentTool === "move") {
         this.selectShape(shape);
       }
     });
@@ -585,6 +647,7 @@ var WidgetController = class {
   }
   setTool(tool) {
     this.currentTool = tool;
+    this.panOrigin = null;
     this.selectShape(null);
     this.updateShapeInteractivity();
     for (const button of this.toolButtons) {
@@ -592,13 +655,18 @@ var WidgetController = class {
     }
   }
   updateShapeInteractivity() {
-    const isSelectable = this.currentTool === "select";
+    const isMovable = this.currentTool === "move";
     for (const shape of this.annotationLayer?.find(".annotation") ?? []) {
-      shape.draggable(isSelectable);
+      shape.draggable(isMovable);
     }
-    if (this.stage) {
-      this.stage.container().style.cursor = isSelectable ? "default" : "crosshair";
+    this.updateStageCursor();
+  }
+  updateStageCursor(isPanning = false) {
+    if (!this.stage) {
+      return;
     }
+    const cursor = this.currentTool === "pan" ? isPanning ? "grabbing" : "grab" : this.currentTool === "move" ? "default" : "crosshair";
+    this.stage.container().style.cursor = cursor;
   }
   selectShape(shape) {
     this.selectedShape = shape;
@@ -707,7 +775,7 @@ var WidgetController = class {
         }
         attachments.push({ file: blob, source: item.source, filename: item.filename });
       }
-      const response = await this.reporter.submit({
+      await this.reporter.submit({
         message: this.message.value.trim(),
         attachments,
         metadata: {
@@ -722,8 +790,14 @@ var WidgetController = class {
         }
       });
       this.resetContent();
-      this.successMessage.textContent = this.config.labels.success.replace("{id}", response.id);
+      this.successMessage.textContent = this.config.labels.success;
       this.successMessage.hidden = false;
+      this.successCloseTimer = window.setTimeout(() => {
+        this.successCloseTimer = null;
+        if (this.dialog.open) {
+          this.dialog.close();
+        }
+      }, SUCCESS_CLOSE_DELAY);
     } catch (error) {
       this.setError(this.errorText(error));
     } finally {
@@ -806,6 +880,7 @@ var WidgetController = class {
     this.annotationLayer = null;
     this.transformer = null;
     this.selectedShape = null;
+    this.panOrigin = null;
     this.canvasHost.replaceChildren();
     this.canvasHost.style.removeProperty("width");
     this.canvasHost.style.removeProperty("height");
@@ -827,12 +902,20 @@ var WidgetController = class {
     if (this.isSubmitting) {
       return;
     }
+    if (this.successCloseTimer !== null) {
+      window.clearTimeout(this.successCloseTimer);
+      this.successCloseTimer = null;
+    }
     this.clearMessages();
     this.resetContent();
-    this.setTool("select");
+    this.setTool("move");
   }
   destroy() {
     this.reporter.destroyDiagnostics();
+    if (this.successCloseTimer !== null) {
+      window.clearTimeout(this.successCloseTimer);
+      this.successCloseTimer = null;
+    }
     this.resetContent();
     if (this.dialog.open) {
       this.dialog.close();
@@ -853,7 +936,9 @@ var labels = {
     dropHint: "\u307E\u305F\u306F\u30C9\u30E9\u30C3\u30B0\uFF06\u30C9\u30ED\u30C3\u30D7",
     fileHint: "PNG / JPEG / WebP\u30FB1\u679A5MB\u307E\u3067",
     attachments: "\u6DFB\u4ED8\u753B\u50CF",
-    select: "\u9078\u629E",
+    removeAttachment: "\u6DFB\u4ED8\u753B\u50CF\u300C{filename}\u300D\u3092\u524A\u9664",
+    move: "\u79FB\u52D5",
+    pan: "\u624B\u306E\u3072\u3089",
     rectangle: "\u56DB\u89D2",
     arrow: "\u77E2\u5370",
     undo: "\u5143\u306B\u623B\u3059",
@@ -865,7 +950,7 @@ var labels = {
     toolbar: "\u753B\u50CF\u6CE8\u91C8\u30C4\u30FC\u30EB",
     zoomGroup: "\u753B\u50CF\u306E\u8868\u793A\u500D\u7387",
     empty: "\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u307E\u305F\u306F\u753B\u50CF\u3092\u9078\u629E\u3059\u308B\u3068\u3001\u3053\u3053\u3067\u77E2\u5370\u3068\u56DB\u89D2\u3092\u66F8\u304D\u8FBC\u3081\u307E\u3059\u3002",
-    editorHelp: "\u9078\u629E\u4E2D\u306E\u56F3\u5F62\u306F\u79FB\u52D5\u30FB\u30EA\u30B5\u30A4\u30BA\u3067\u304D\u307E\u3059\u3002Delete\u3067\u524A\u9664\u3001Ctrl/Cmd+Z\u3067\u5143\u306B\u623B\u305B\u307E\u3059\u3002",
+    editorHelp: "\u56F3\u5F62\u306E\u79FB\u52D5\u30FB\u30EA\u30B5\u30A4\u30BA\u30FB\u524A\u9664\u3084\u5143\u306B\u623B\u3059\u64CD\u4F5C\u306F\u3001\u4E0B\u306E\u30DC\u30BF\u30F3\u304B\u3089\u884C\u3048\u307E\u3059\u3002",
     cancel: "\u30AD\u30E3\u30F3\u30BB\u30EB",
     submit: "\u30EC\u30DD\u30FC\u30C8\u3092\u9001\u4FE1",
     submitting: "\u9001\u4FE1\u4E2D\u2026",
@@ -880,7 +965,7 @@ var labels = {
     submitFailed: "\u30EC\u30DD\u30FC\u30C8\u3092\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u6642\u9593\u3092\u304A\u3044\u3066\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     validationFailed: "\u5165\u529B\u5185\u5BB9\u307E\u305F\u306F\u6DFB\u4ED8\u753B\u50CF\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     rateLimited: "\u9001\u4FE1\u56DE\u6570\u304C\u4E0A\u9650\u306B\u9054\u3057\u307E\u3057\u305F\u3002\u3057\u3070\u3089\u304F\u5F85\u3063\u3066\u304B\u3089\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
-    success: "\u9001\u4FE1\u3057\u307E\u3057\u305F\u3002\u30EC\u30DD\u30FC\u30C8ID: {id}"
+    success: "\u9001\u4FE1\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002\u3053\u306E\u753B\u9762\u3092\u9589\u3058\u307E\u3059\u3002"
   },
   en: {
     launcher: "Send feedback",
@@ -895,7 +980,9 @@ var labels = {
     dropHint: "or drag and drop",
     fileHint: "PNG / JPEG / WebP \xB7 up to 5 MB each",
     attachments: "Attached images",
-    select: "Select",
+    removeAttachment: "Remove attached image {filename}",
+    move: "Move",
+    pan: "Hand tool",
     rectangle: "Rectangle",
     arrow: "Arrow",
     undo: "Undo",
@@ -907,7 +994,7 @@ var labels = {
     toolbar: "Image annotation tools",
     zoomGroup: "Image zoom",
     empty: "Choose a screenshot or image to add arrows and rectangles here.",
-    editorHelp: "Move or resize selected shapes. Press Delete to remove and Ctrl/Cmd+Z to undo.",
+    editorHelp: "Use the controls below to move, resize, delete, or undo annotation changes.",
     cancel: "Cancel",
     submit: "Send report",
     submitting: "Sending\u2026",
@@ -922,7 +1009,7 @@ var labels = {
     submitFailed: "The report could not be sent. Please try again later.",
     validationFailed: "Check the message and attached images.",
     rateLimited: "Too many reports were sent. Please try again later.",
-    success: "Sent. Report ID: {id}"
+    success: "Your feedback was sent. This dialog will close."
   }
 };
 function widgetTemplate(text) {
@@ -940,19 +1027,21 @@ function widgetTemplate(text) {
                         <section class="sidebar">
                             <label class="field"><span>${text.message} <b>*</b></span><textarea data-feedback-message required maxlength="10000" rows="6" placeholder="${text.messagePlaceholder}"></textarea></label>
                             <div class="field"><span>${text.images}</span><label data-feedback-dropzone class="dropzone"><span class="plus" aria-hidden="true">\uFF0B</span><span><strong>${text.chooseImages}</strong> ${text.dropHint}</span><small>${text.fileHint}</small><input data-feedback-files type="file" accept="image/png,image/jpeg,image/webp" multiple></label></div>
-                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / 5</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><button type="button" data-feedback-thumbnail class="thumbnail"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button></template></div>
+                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / 5</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><div data-feedback-thumbnail class="thumbnail"><button type="button" data-feedback-thumbnail-select class="thumbnail-select"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button><button type="button" data-feedback-remove-image class="thumbnail-remove"></button></div></template></div>
                         </section>
                         <section class="editor">
-                            <div class="toolbar" role="toolbar" aria-label="${text.toolbar}">
-                                <button type="button" data-tool="select" aria-pressed="true">${text.select}</button><button type="button" data-tool="rectangle" aria-pressed="false">${text.rectangle}</button><button type="button" data-tool="arrow" aria-pressed="false">${text.arrow}</button>
-                                <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${text.undo}</button><button type="button" data-feedback-delete>${text.deleteSelection}</button><button type="button" data-feedback-clear class="danger">${text.clear}</button>
-                                <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">\u2212</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">\uFF0B</button></div><button type="button" data-feedback-fit-all>${text.fit}</button>
-                            </div>
                             <div data-feedback-viewport class="viewport"><div class="viewport-inner"><p data-feedback-empty>${text.empty}</p><div data-feedback-canvas class="canvas-host"></div></div></div>
-                            <p class="help">${text.editorHelp}</p>
+                            <div class="editor-controls">
+                                <p class="help">${text.editorHelp}</p>
+                                <div class="toolbar" role="toolbar" aria-label="${text.toolbar}">
+                                    <button type="button" data-tool="move" aria-pressed="true">${text.move}</button><button type="button" data-tool="pan" aria-pressed="false">${text.pan}</button><button type="button" data-tool="rectangle" aria-pressed="false">${text.rectangle}</button><button type="button" data-tool="arrow" aria-pressed="false">${text.arrow}</button>
+                                    <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${text.undo}</button><button type="button" data-feedback-delete>${text.deleteSelection}</button><button type="button" data-feedback-clear class="danger">${text.clear}</button>
+                                    <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">\u2212</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">\uFF0B</button></div><button type="button" data-feedback-fit-all>${text.fit}</button>
+                                </div>
+                            </div>
                         </section>
                     </div>
-                    <footer><div aria-live="polite" class="messages"><p data-feedback-error hidden></p><p data-feedback-success hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
+                    <footer><div aria-live="polite" class="messages"><p data-feedback-error hidden></p><p data-feedback-success role="status" hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
                 </form>
             </dialog>
         </div>

@@ -37,7 +37,9 @@ interface WidgetLabels {
   dropHint: string
   fileHint: string
   attachments: string
-  select: string
+  removeAttachment: string
+  move: string
+  pan: string
   rectangle: string
   arrow: string
   undo: string
@@ -67,7 +69,7 @@ interface WidgetLabels {
   success: string
 }
 
-type Tool = 'select' | 'rectangle' | 'arrow'
+type Tool = 'move' | 'pan' | 'rectangle' | 'arrow'
 type AnnotationType = 'rectangle' | 'arrow'
 
 interface AnnotationSnapshot {
@@ -100,6 +102,7 @@ const ANNOTATION_STROKE = 4
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2
 const ZOOM_STEP = 0.25
+const SUCCESS_CLOSE_DELAY = 1500
 
 class WidgetController {
   private readonly reporter
@@ -128,14 +131,21 @@ class WidgetController {
   private readonly toolButtons: HTMLButtonElement[]
   private images: EditableImage[] = []
   private selectedImageId: string | null = null
-  private currentTool: Tool = 'select'
+  private currentTool: Tool = 'move'
   private stage: Konva.Stage | null = null
   private annotationLayer: Konva.Layer | null = null
   private transformer: Konva.Transformer | null = null
   private selectedShape: Konva.Shape | null = null
   private drawingShape: Konva.Shape | null = null
   private drawingOrigin: { x: number; y: number } | null = null
+  private panOrigin: {
+    clientX: number
+    clientY: number
+    scrollLeft: number
+    scrollTop: number
+  } | null = null
   private isSubmitting = false
+  private successCloseTimer: number | null = null
 
   public constructor(
     private readonly root: ShadowRoot,
@@ -226,26 +236,6 @@ class WidgetController {
     this.dropzone.addEventListener('drop', (event) => {
       if (event instanceof DragEvent) {
         void this.addFiles(event.dataTransfer?.files ?? null)
-      }
-    })
-
-    this.dialog.addEventListener('keydown', (event) => {
-      if (!this.dialog.open) {
-        return
-      }
-
-      const target = event.target
-      const isTextInput =
-        target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z' && !isTextInput) {
-        event.preventDefault()
-        this.undo()
-      }
-
-      if ((event.key === 'Delete' || event.key === 'Backspace') && !isTextInput) {
-        event.preventDefault()
-        this.deleteSelectedShape()
       }
     })
   }
@@ -401,28 +391,56 @@ class WidgetController {
 
     for (const item of this.images) {
       const fragment = this.thumbnailTemplate.content.cloneNode(true) as DocumentFragment
-      const button = fragment.querySelector<HTMLButtonElement>('[data-feedback-thumbnail]')
+      const thumbnail = fragment.querySelector<HTMLElement>('[data-feedback-thumbnail]')
+      const selectButton = fragment.querySelector<HTMLButtonElement>(
+        '[data-feedback-thumbnail-select]',
+      )
+      const removeButton = fragment.querySelector<HTMLButtonElement>('[data-feedback-remove-image]')
       const image = fragment.querySelector<HTMLImageElement>('[data-thumbnail-image]')
       const label = fragment.querySelector<HTMLElement>('[data-thumbnail-label]')
 
-      if (!button || !image || !label) {
+      if (!thumbnail || !selectButton || !removeButton || !image || !label) {
         continue
       }
 
-      button.dataset.selected = String(item.id === this.selectedImageId)
+      thumbnail.dataset.selected = String(item.id === this.selectedImageId)
       image.src = item.objectUrl
       image.alt = item.filename
       label.textContent = item.filename
-      button.addEventListener('click', () => {
+      removeButton.setAttribute(
+        'aria-label',
+        this.config.labels.removeAttachment.replace('{filename}', item.filename),
+      )
+      selectButton.addEventListener('click', () => {
         this.selectedImageId = item.id
         this.renderThumbnails()
         this.renderSelectedImage()
       })
+      removeButton.addEventListener('click', () => this.removeImage(item.id))
       this.thumbnails.append(fragment)
     }
 
     this.count.textContent = `${this.images.length} / ${MAX_FILES}`
     this.updateControls()
+  }
+
+  private removeImage(imageId: string): void {
+    const index = this.images.findIndex((item) => item.id === imageId)
+    if (index === -1) {
+      return
+    }
+
+    const [removed] = this.images.splice(index, 1)
+    if (removed) {
+      URL.revokeObjectURL(removed.objectUrl)
+    }
+
+    if (this.selectedImageId === imageId) {
+      this.selectedImageId = this.images[Math.min(index, this.images.length - 1)]?.id ?? null
+      this.renderSelectedImage()
+    }
+
+    this.renderThumbnails()
   }
 
   private renderSelectedImage(): void {
@@ -542,9 +560,24 @@ class WidgetController {
       }
     }
 
+    const renderPixelRatio = interactive ? this.getRenderPixelRatio(item) : 1
+    backgroundLayer.getCanvas().setPixelRatio(renderPixelRatio)
+    annotationLayer.getCanvas().setPixelRatio(renderPixelRatio)
+    annotationLayer.getHitCanvas().setPixelRatio(renderPixelRatio)
+    backgroundLayer.draw()
     annotationLayer.draw()
 
     return { stage, annotationLayer, transformer }
+  }
+
+  private getRenderPixelRatio(item: EditableImage): number {
+    const sourcePixelRatio = Math.min(
+      item.naturalWidth / item.stageWidth,
+      item.naturalHeight / item.stageHeight,
+    )
+    const targetPixelRatio = Math.max(window.devicePixelRatio || 1, MAX_ZOOM)
+
+    return Math.max(1, Math.min(sourcePixelRatio, targetPixelRatio))
   }
 
   private createShape(annotation: AnnotationSnapshot, interactive: boolean): Konva.Shape {
@@ -559,7 +592,22 @@ class WidgetController {
     }
 
     this.stage.on('pointerdown', (event) => {
-      if (this.currentTool === 'select') {
+      if (this.currentTool === 'pan') {
+        const pointer = this.getClientPointer(event.evt)
+        if (pointer) {
+          event.evt.preventDefault()
+          this.panOrigin = {
+            ...pointer,
+            scrollLeft: this.canvasViewport.scrollLeft,
+            scrollTop: this.canvasViewport.scrollTop,
+          }
+          this.updateStageCursor(true)
+        }
+
+        return
+      }
+
+      if (this.currentTool === 'move') {
         if (event.target === this.stage) {
           this.selectShape(null)
         }
@@ -599,7 +647,20 @@ class WidgetController {
       this.annotationLayer?.add(this.drawingShape)
     })
 
-    this.stage.on('pointermove', () => {
+    this.stage.on('pointermove', (event) => {
+      if (this.panOrigin) {
+        const pointer = this.getClientPointer(event.evt)
+        if (pointer) {
+          event.evt.preventDefault()
+          this.canvasViewport.scrollLeft =
+            this.panOrigin.scrollLeft - (pointer.clientX - this.panOrigin.clientX)
+          this.canvasViewport.scrollTop =
+            this.panOrigin.scrollTop - (pointer.clientY - this.panOrigin.clientY)
+        }
+
+        return
+      }
+
       if (!this.drawingShape || !this.drawingOrigin) {
         return
       }
@@ -627,6 +688,13 @@ class WidgetController {
     })
 
     this.stage.on('pointerup pointercancel', () => {
+      if (this.panOrigin) {
+        this.panOrigin = null
+        this.updateStageCursor()
+
+        return
+      }
+
       if (!this.drawingShape) {
         return
       }
@@ -653,10 +721,18 @@ class WidgetController {
     })
   }
 
+  private getClientPointer(event: Event): { clientX: number; clientY: number } | null {
+    if (!('clientX' in event) || !('clientY' in event)) {
+      return null
+    }
+
+    return { clientX: Number(event.clientX), clientY: Number(event.clientY) }
+  }
+
   private bindShapeEvents(shape: Konva.Shape, item: EditableImage): void {
     shape.on('click tap', (event) => {
       event.cancelBubble = true
-      if (this.currentTool === 'select') {
+      if (this.currentTool === 'move') {
         this.selectShape(shape)
       }
     })
@@ -671,6 +747,7 @@ class WidgetController {
 
   private setTool(tool: Tool): void {
     this.currentTool = tool
+    this.panOrigin = null
     this.selectShape(null)
     this.updateShapeInteractivity()
 
@@ -680,13 +757,27 @@ class WidgetController {
   }
 
   private updateShapeInteractivity(): void {
-    const isSelectable = this.currentTool === 'select'
+    const isMovable = this.currentTool === 'move'
     for (const shape of this.annotationLayer?.find<Konva.Shape>('.annotation') ?? []) {
-      shape.draggable(isSelectable)
+      shape.draggable(isMovable)
     }
-    if (this.stage) {
-      this.stage.container().style.cursor = isSelectable ? 'default' : 'crosshair'
+    this.updateStageCursor()
+  }
+
+  private updateStageCursor(isPanning: boolean = false): void {
+    if (!this.stage) {
+      return
     }
+
+    const cursor =
+      this.currentTool === 'pan'
+        ? isPanning
+          ? 'grabbing'
+          : 'grab'
+        : this.currentTool === 'move'
+          ? 'default'
+          : 'crosshair'
+    this.stage.container().style.cursor = cursor
   }
 
   private selectShape(shape: Konva.Shape | null): void {
@@ -819,7 +910,7 @@ class WidgetController {
         attachments.push({ file: blob, source: item.source, filename: item.filename })
       }
 
-      const response = await this.reporter.submit({
+      await this.reporter.submit({
         message: this.message.value.trim(),
         attachments,
         metadata: {
@@ -835,8 +926,14 @@ class WidgetController {
       })
 
       this.resetContent()
-      this.successMessage.textContent = this.config.labels.success.replace('{id}', response.id)
+      this.successMessage.textContent = this.config.labels.success
       this.successMessage.hidden = false
+      this.successCloseTimer = window.setTimeout(() => {
+        this.successCloseTimer = null
+        if (this.dialog.open) {
+          this.dialog.close()
+        }
+      }, SUCCESS_CLOSE_DELAY)
     } catch (error) {
       this.setError(this.errorText(error))
     } finally {
@@ -934,6 +1031,7 @@ class WidgetController {
     this.annotationLayer = null
     this.transformer = null
     this.selectedShape = null
+    this.panOrigin = null
     this.canvasHost.replaceChildren()
     this.canvasHost.style.removeProperty('width')
     this.canvasHost.style.removeProperty('height')
@@ -957,13 +1055,21 @@ class WidgetController {
     if (this.isSubmitting) {
       return
     }
+    if (this.successCloseTimer !== null) {
+      window.clearTimeout(this.successCloseTimer)
+      this.successCloseTimer = null
+    }
     this.clearMessages()
     this.resetContent()
-    this.setTool('select')
+    this.setTool('move')
   }
 
   public destroy(): void {
     this.reporter.destroyDiagnostics()
+    if (this.successCloseTimer !== null) {
+      window.clearTimeout(this.successCloseTimer)
+      this.successCloseTimer = null
+    }
     this.resetContent()
     if (this.dialog.open) {
       this.dialog.close()
@@ -985,7 +1091,9 @@ const labels = {
     dropHint: 'またはドラッグ＆ドロップ',
     fileHint: 'PNG / JPEG / WebP・1枚5MBまで',
     attachments: '添付画像',
-    select: '選択',
+    removeAttachment: '添付画像「{filename}」を削除',
+    move: '移動',
+    pan: '手のひら',
     rectangle: '四角',
     arrow: '矢印',
     undo: '元に戻す',
@@ -997,7 +1105,7 @@ const labels = {
     toolbar: '画像注釈ツール',
     zoomGroup: '画像の表示倍率',
     empty: 'スクリーンショットまたは画像を選択すると、ここで矢印と四角を書き込めます。',
-    editorHelp: '選択中の図形は移動・リサイズできます。Deleteで削除、Ctrl/Cmd+Zで元に戻せます。',
+    editorHelp: '図形の移動・リサイズ・削除や元に戻す操作は、下のボタンから行えます。',
     cancel: 'キャンセル',
     submit: 'レポートを送信',
     submitting: '送信中…',
@@ -1012,7 +1120,7 @@ const labels = {
     submitFailed: 'レポートを送信できませんでした。時間をおいて再試行してください。',
     validationFailed: '入力内容または添付画像を確認してください。',
     rateLimited: '送信回数が上限に達しました。しばらく待ってから再試行してください。',
-    success: '送信しました。レポートID: {id}',
+    success: '送信が完了しました。この画面を閉じます。',
   },
   en: {
     launcher: 'Send feedback',
@@ -1027,7 +1135,9 @@ const labels = {
     dropHint: 'or drag and drop',
     fileHint: 'PNG / JPEG / WebP · up to 5 MB each',
     attachments: 'Attached images',
-    select: 'Select',
+    removeAttachment: 'Remove attached image {filename}',
+    move: 'Move',
+    pan: 'Hand tool',
     rectangle: 'Rectangle',
     arrow: 'Arrow',
     undo: 'Undo',
@@ -1039,7 +1149,7 @@ const labels = {
     toolbar: 'Image annotation tools',
     zoomGroup: 'Image zoom',
     empty: 'Choose a screenshot or image to add arrows and rectangles here.',
-    editorHelp: 'Move or resize selected shapes. Press Delete to remove and Ctrl/Cmd+Z to undo.',
+    editorHelp: 'Use the controls below to move, resize, delete, or undo annotation changes.',
     cancel: 'Cancel',
     submit: 'Send report',
     submitting: 'Sending…',
@@ -1054,7 +1164,7 @@ const labels = {
     submitFailed: 'The report could not be sent. Please try again later.',
     validationFailed: 'Check the message and attached images.',
     rateLimited: 'Too many reports were sent. Please try again later.',
-    success: 'Sent. Report ID: {id}',
+    success: 'Your feedback was sent. This dialog will close.',
   },
 } satisfies Record<'ja' | 'en', WidgetLabels>
 
@@ -1073,19 +1183,21 @@ function widgetTemplate(text: WidgetLabels): string {
                         <section class="sidebar">
                             <label class="field"><span>${text.message} <b>*</b></span><textarea data-feedback-message required maxlength="10000" rows="6" placeholder="${text.messagePlaceholder}"></textarea></label>
                             <div class="field"><span>${text.images}</span><label data-feedback-dropzone class="dropzone"><span class="plus" aria-hidden="true">＋</span><span><strong>${text.chooseImages}</strong> ${text.dropHint}</span><small>${text.fileHint}</small><input data-feedback-files type="file" accept="image/png,image/jpeg,image/webp" multiple></label></div>
-                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / 5</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><button type="button" data-feedback-thumbnail class="thumbnail"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button></template></div>
+                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / 5</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><div data-feedback-thumbnail class="thumbnail"><button type="button" data-feedback-thumbnail-select class="thumbnail-select"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button><button type="button" data-feedback-remove-image class="thumbnail-remove"></button></div></template></div>
                         </section>
                         <section class="editor">
-                            <div class="toolbar" role="toolbar" aria-label="${text.toolbar}">
-                                <button type="button" data-tool="select" aria-pressed="true">${text.select}</button><button type="button" data-tool="rectangle" aria-pressed="false">${text.rectangle}</button><button type="button" data-tool="arrow" aria-pressed="false">${text.arrow}</button>
-                                <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${text.undo}</button><button type="button" data-feedback-delete>${text.deleteSelection}</button><button type="button" data-feedback-clear class="danger">${text.clear}</button>
-                                <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">−</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">＋</button></div><button type="button" data-feedback-fit-all>${text.fit}</button>
-                            </div>
                             <div data-feedback-viewport class="viewport"><div class="viewport-inner"><p data-feedback-empty>${text.empty}</p><div data-feedback-canvas class="canvas-host"></div></div></div>
-                            <p class="help">${text.editorHelp}</p>
+                            <div class="editor-controls">
+                                <p class="help">${text.editorHelp}</p>
+                                <div class="toolbar" role="toolbar" aria-label="${text.toolbar}">
+                                    <button type="button" data-tool="move" aria-pressed="true">${text.move}</button><button type="button" data-tool="pan" aria-pressed="false">${text.pan}</button><button type="button" data-tool="rectangle" aria-pressed="false">${text.rectangle}</button><button type="button" data-tool="arrow" aria-pressed="false">${text.arrow}</button>
+                                    <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${text.undo}</button><button type="button" data-feedback-delete>${text.deleteSelection}</button><button type="button" data-feedback-clear class="danger">${text.clear}</button>
+                                    <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">−</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">＋</button></div><button type="button" data-feedback-fit-all>${text.fit}</button>
+                                </div>
+                            </div>
                         </section>
                     </div>
-                    <footer><div aria-live="polite" class="messages"><p data-feedback-error hidden></p><p data-feedback-success hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
+                    <footer><div aria-live="polite" class="messages"><p data-feedback-error hidden></p><p data-feedback-success role="status" hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
                 </form>
             </dialog>
         </div>
