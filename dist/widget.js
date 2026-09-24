@@ -80,6 +80,8 @@ var widgetStyles = `
     .editor-controls { display: grid; flex: none; gap: .5rem; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
     .toolbar button, .footer-actions button { border: 1px solid var(--fbr-border); border-radius: .5rem; background: transparent; padding: .5rem .75rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    .toolbar button { display: inline-flex; align-items: center; justify-content: center; gap: .375rem; }
+    .toolbar-icon { width: 1rem; height: 1rem; flex: none; }
     .toolbar button[aria-pressed="true"], .primary { border-color: var(--fbr-accent) !important; background: var(--fbr-accent) !important; color: #fff !important; }
     button:disabled { cursor: not-allowed; opacity: .4; }
     .separator { width: 1px; height: 1.5rem; margin: 0 .25rem; background: var(--fbr-border); }
@@ -148,10 +150,8 @@ var WidgetController = class {
     this.submitButton = this.requireElement("[data-feedback-submit]");
     this.undoButton = this.requireElement("[data-feedback-undo]");
     this.deleteButton = this.requireElement("[data-feedback-delete]");
-    this.clearButton = this.requireElement("[data-feedback-clear]");
     this.zoomOutButton = this.requireElement("[data-feedback-zoom-out]");
     this.zoomInButton = this.requireElement("[data-feedback-zoom-in]");
-    this.fitAllButton = this.requireElement("[data-feedback-fit-all]");
     this.zoomLevel = this.requireElement("[data-feedback-zoom-level]");
     this.toolButtons = Array.from(this.root.querySelectorAll("[data-tool]"));
     this.reporter = createFeedbackReporter({
@@ -182,10 +182,8 @@ var WidgetController = class {
   submitButton;
   undoButton;
   deleteButton;
-  clearButton;
   zoomOutButton;
   zoomInButton;
-  fitAllButton;
   zoomLevel;
   toolButtons;
   images = [];
@@ -215,10 +213,8 @@ var WidgetController = class {
     this.fileInput.addEventListener("change", () => void this.addFiles(this.fileInput.files));
     this.undoButton.addEventListener("click", () => this.undo());
     this.deleteButton.addEventListener("click", () => this.deleteSelectedShape());
-    this.clearButton.addEventListener("click", () => this.clearAnnotations());
     this.zoomOutButton.addEventListener("click", () => this.zoomBy(-ZOOM_STEP));
     this.zoomInButton.addEventListener("click", () => this.zoomBy(ZOOM_STEP));
-    this.fitAllButton.addEventListener("click", () => this.fitAll());
     this.dialog.addEventListener("close", () => this.reset());
     for (const toolButton of this.toolButtons) {
       toolButton.addEventListener("click", () => this.setTool(toolButton.dataset.tool));
@@ -444,19 +440,6 @@ var WidgetController = class {
     }
     const nextZoom = change < 0 ? Math.max(MIN_ZOOM, item.zoom + change) : Math.min(MAX_ZOOM, item.zoom + change);
     this.setZoom(item, nextZoom);
-  }
-  fitAll() {
-    const item = this.getSelectedImage();
-    if (!item) {
-      return;
-    }
-    const viewportSize = this.getViewportAvailableSize();
-    const zoom = Math.min(
-      1,
-      viewportSize.width / item.stageWidth,
-      viewportSize.height / item.stageHeight
-    );
-    this.setZoom(item, Math.max(0.01, zoom));
   }
   setZoom(item, zoom) {
     item.zoom = Number(zoom.toFixed(4));
@@ -735,18 +718,6 @@ var WidgetController = class {
     this.commitAnnotations(item);
     this.annotationLayer?.draw();
   }
-  clearAnnotations() {
-    const item = this.getSelectedImage();
-    if (!item || item.annotations.length === 0) {
-      return;
-    }
-    for (const shape of this.annotationLayer?.find(".annotation") ?? []) {
-      shape.destroy();
-    }
-    this.selectShape(null);
-    this.commitAnnotations(item);
-    this.annotationLayer?.draw();
-  }
   async submit(event) {
     event.preventDefault();
     if (this.isSubmitting || !this.form.reportValidity()) {
@@ -865,10 +836,8 @@ var WidgetController = class {
     const item = this.getSelectedImage();
     this.undoButton.disabled = !item || item.history.length <= 1;
     this.deleteButton.disabled = this.selectedShape === null;
-    this.clearButton.disabled = !item || item.annotations.length === 0;
     this.zoomOutButton.disabled = !item || item.zoom <= MIN_ZOOM;
     this.zoomInButton.disabled = !item || item.zoom >= MAX_ZOOM;
-    this.fitAllButton.disabled = item === null;
     this.zoomLevel.value = `${Math.round((item?.zoom ?? 1) * 100)}%`;
     for (const button of this.toolButtons) {
       button.disabled = item === null;
@@ -942,11 +911,9 @@ var labels = {
     rectangle: "\u56DB\u89D2",
     arrow: "\u77E2\u5370",
     undo: "\u5143\u306B\u623B\u3059",
-    deleteSelection: "\u9078\u629E\u3092\u524A\u9664",
-    clear: "\u5168\u6D88\u53BB",
+    deleteSelection: "\u56F3\u5F62\u3092\u524A\u9664",
     zoomOut: "\u753B\u50CF\u3092\u7E2E\u5C0F",
     zoomIn: "\u753B\u50CF\u3092\u62E1\u5927",
-    fit: "\u5168\u4F53\u8868\u793A",
     toolbar: "\u753B\u50CF\u6CE8\u91C8\u30C4\u30FC\u30EB",
     zoomGroup: "\u753B\u50CF\u306E\u8868\u793A\u500D\u7387",
     empty: "\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u307E\u305F\u306F\u753B\u50CF\u3092\u9078\u629E\u3059\u308B\u3068\u3001\u3053\u3053\u3067\u77E2\u5370\u3068\u56DB\u89D2\u3092\u66F8\u304D\u8FBC\u3081\u307E\u3059\u3002",
@@ -986,11 +953,9 @@ var labels = {
     rectangle: "Rectangle",
     arrow: "Arrow",
     undo: "Undo",
-    deleteSelection: "Delete selection",
-    clear: "Clear all",
+    deleteSelection: "Delete shape",
     zoomOut: "Zoom out",
     zoomIn: "Zoom in",
-    fit: "Fit image",
     toolbar: "Image annotation tools",
     zoomGroup: "Image zoom",
     empty: "Choose a screenshot or image to add arrows and rectangles here.",
@@ -1011,6 +976,14 @@ var labels = {
     rateLimited: "Too many reports were sent. Please try again later.",
     success: "Your feedback was sent. This dialog will close."
   }
+};
+var toolbarIcons = {
+  move: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/></svg>',
+  pan: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>',
+  rectangle: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>',
+  arrow: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.207 19.793a.707.707 0 0 1-1.207-.5V16a1 1 0 0 0-1-1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h6a1 1 0 0 0 1-1V4.707a.707.707 0 0 1 1.207-.5l6.94 6.94a1.207 1.207 0 0 1 0 1.707z"/></svg>',
+  undo: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>',
+  deleteShape: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>'
 };
 function widgetTemplate(text) {
   return `
@@ -1034,9 +1007,9 @@ function widgetTemplate(text) {
                             <div class="editor-controls">
                                 <p class="help">${text.editorHelp}</p>
                                 <div class="toolbar" role="toolbar" aria-label="${text.toolbar}">
-                                    <button type="button" data-tool="move" aria-pressed="true">${text.move}</button><button type="button" data-tool="pan" aria-pressed="false">${text.pan}</button><button type="button" data-tool="rectangle" aria-pressed="false">${text.rectangle}</button><button type="button" data-tool="arrow" aria-pressed="false">${text.arrow}</button>
-                                    <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${text.undo}</button><button type="button" data-feedback-delete>${text.deleteSelection}</button><button type="button" data-feedback-clear class="danger">${text.clear}</button>
-                                    <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">\u2212</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">\uFF0B</button></div><button type="button" data-feedback-fit-all>${text.fit}</button>
+                                    <button type="button" data-tool="move" aria-pressed="true">${toolbarIcons.move}<span>${text.move}</span></button><button type="button" data-tool="pan" aria-pressed="false">${toolbarIcons.pan}<span>${text.pan}</span></button><button type="button" data-tool="rectangle" aria-pressed="false">${toolbarIcons.rectangle}<span>${text.rectangle}</span></button><button type="button" data-tool="arrow" aria-pressed="false">${toolbarIcons.arrow}<span>${text.arrow}</span></button>
+                                    <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${toolbarIcons.undo}<span>${text.undo}</span></button><button type="button" data-feedback-delete class="danger">${toolbarIcons.deleteShape}<span>${text.deleteSelection}</span></button>
+                                    <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">\u2212</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">\uFF0B</button></div>
                                 </div>
                             </div>
                         </section>
@@ -1099,6 +1072,12 @@ function registerFeedbackReporterElement(tagName = "trust-feedback-reporter") {
   customElements.define(tagName, elementConstructor);
   registeredElementConstructors.set(tagName, elementConstructor);
 }
+/*!
+ * Toolbar SVG paths are from Lucide Icons.
+ * Lucide: Copyright (c) 2026 Lucide Icons and Contributors, ISC License.
+ * Feather-derived move, square, and trash icons: Copyright (c) 2013-present Cole Bemis, MIT License.
+ * License text: https://github.com/lucide-icons/lucide/blob/main/LICENSE
+ */
 
 export { FeedbackReporterElement, registerFeedbackReporterElement };
 //# sourceMappingURL=widget.js.map

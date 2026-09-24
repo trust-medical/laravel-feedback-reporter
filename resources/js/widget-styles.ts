@@ -76,6 +76,8 @@ export const widgetStyles = `
     .editor-controls { display: grid; flex: none; gap: .5rem; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
     .toolbar button, .footer-actions button { border: 1px solid var(--fbr-border); border-radius: .5rem; background: transparent; padding: .5rem .75rem; font-size: .875rem; font-weight: 600; cursor: pointer; }
+    .toolbar button { display: inline-flex; align-items: center; justify-content: center; gap: .375rem; }
+    .toolbar-icon { width: 1rem; height: 1rem; flex: none; }
     .toolbar button[aria-pressed="true"], .primary { border-color: var(--fbr-accent) !important; background: var(--fbr-accent) !important; color: #fff !important; }
     button:disabled { cursor: not-allowed; opacity: .4; }
     .separator { width: 1px; height: 1.5rem; margin: 0 .25rem; background: var(--fbr-border); }

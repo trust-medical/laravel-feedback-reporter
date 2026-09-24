@@ -44,10 +44,8 @@ interface WidgetLabels {
   arrow: string
   undo: string
   deleteSelection: string
-  clear: string
   zoomOut: string
   zoomIn: string
-  fit: string
   toolbar: string
   zoomGroup: string
   empty: string
@@ -123,10 +121,8 @@ class WidgetController {
   private readonly submitButton: HTMLButtonElement
   private readonly undoButton: HTMLButtonElement
   private readonly deleteButton: HTMLButtonElement
-  private readonly clearButton: HTMLButtonElement
   private readonly zoomOutButton: HTMLButtonElement
   private readonly zoomInButton: HTMLButtonElement
-  private readonly fitAllButton: HTMLButtonElement
   private readonly zoomLevel: HTMLOutputElement
   private readonly toolButtons: HTMLButtonElement[]
   private images: EditableImage[] = []
@@ -170,10 +166,8 @@ class WidgetController {
     this.submitButton = this.requireElement<HTMLButtonElement>('[data-feedback-submit]')
     this.undoButton = this.requireElement<HTMLButtonElement>('[data-feedback-undo]')
     this.deleteButton = this.requireElement<HTMLButtonElement>('[data-feedback-delete]')
-    this.clearButton = this.requireElement<HTMLButtonElement>('[data-feedback-clear]')
     this.zoomOutButton = this.requireElement<HTMLButtonElement>('[data-feedback-zoom-out]')
     this.zoomInButton = this.requireElement<HTMLButtonElement>('[data-feedback-zoom-in]')
-    this.fitAllButton = this.requireElement<HTMLButtonElement>('[data-feedback-fit-all]')
     this.zoomLevel = this.requireElement<HTMLOutputElement>('[data-feedback-zoom-level]')
     this.toolButtons = Array.from(this.root.querySelectorAll<HTMLButtonElement>('[data-tool]'))
 
@@ -209,10 +203,8 @@ class WidgetController {
     this.fileInput.addEventListener('change', () => void this.addFiles(this.fileInput.files))
     this.undoButton.addEventListener('click', () => this.undo())
     this.deleteButton.addEventListener('click', () => this.deleteSelectedShape())
-    this.clearButton.addEventListener('click', () => this.clearAnnotations())
     this.zoomOutButton.addEventListener('click', () => this.zoomBy(-ZOOM_STEP))
     this.zoomInButton.addEventListener('click', () => this.zoomBy(ZOOM_STEP))
-    this.fitAllButton.addEventListener('click', () => this.fitAll())
     this.dialog.addEventListener('close', () => this.reset())
 
     for (const toolButton of this.toolButtons) {
@@ -488,21 +480,6 @@ class WidgetController {
       change < 0 ? Math.max(MIN_ZOOM, item.zoom + change) : Math.min(MAX_ZOOM, item.zoom + change)
 
     this.setZoom(item, nextZoom)
-  }
-
-  private fitAll(): void {
-    const item = this.getSelectedImage()
-    if (!item) {
-      return
-    }
-
-    const viewportSize = this.getViewportAvailableSize()
-    const zoom = Math.min(
-      1,
-      viewportSize.width / item.stageWidth,
-      viewportSize.height / item.stageHeight,
-    )
-    this.setZoom(item, Math.max(0.01, zoom))
   }
 
   private setZoom(item: EditableImage, zoom: number): void {
@@ -859,20 +836,6 @@ class WidgetController {
     this.annotationLayer?.draw()
   }
 
-  private clearAnnotations(): void {
-    const item = this.getSelectedImage()
-    if (!item || item.annotations.length === 0) {
-      return
-    }
-
-    for (const shape of this.annotationLayer?.find<Konva.Shape>('.annotation') ?? []) {
-      shape.destroy()
-    }
-    this.selectShape(null)
-    this.commitAnnotations(item)
-    this.annotationLayer?.draw()
-  }
-
   private async submit(event: SubmitEvent): Promise<void> {
     event.preventDefault()
 
@@ -1014,10 +977,8 @@ class WidgetController {
     const item = this.getSelectedImage()
     this.undoButton.disabled = !item || item.history.length <= 1
     this.deleteButton.disabled = this.selectedShape === null
-    this.clearButton.disabled = !item || item.annotations.length === 0
     this.zoomOutButton.disabled = !item || item.zoom <= MIN_ZOOM
     this.zoomInButton.disabled = !item || item.zoom >= MAX_ZOOM
-    this.fitAllButton.disabled = item === null
     this.zoomLevel.value = `${Math.round((item?.zoom ?? 1) * 100)}%`
 
     for (const button of this.toolButtons) {
@@ -1097,11 +1058,9 @@ const labels = {
     rectangle: '四角',
     arrow: '矢印',
     undo: '元に戻す',
-    deleteSelection: '選択を削除',
-    clear: '全消去',
+    deleteSelection: '図形を削除',
     zoomOut: '画像を縮小',
     zoomIn: '画像を拡大',
-    fit: '全体表示',
     toolbar: '画像注釈ツール',
     zoomGroup: '画像の表示倍率',
     empty: 'スクリーンショットまたは画像を選択すると、ここで矢印と四角を書き込めます。',
@@ -1141,11 +1100,9 @@ const labels = {
     rectangle: 'Rectangle',
     arrow: 'Arrow',
     undo: 'Undo',
-    deleteSelection: 'Delete selection',
-    clear: 'Clear all',
+    deleteSelection: 'Delete shape',
     zoomOut: 'Zoom out',
     zoomIn: 'Zoom in',
-    fit: 'Fit image',
     toolbar: 'Image annotation tools',
     zoomGroup: 'Image zoom',
     empty: 'Choose a screenshot or image to add arrows and rectangles here.',
@@ -1167,6 +1124,24 @@ const labels = {
     success: 'Your feedback was sent. This dialog will close.',
   },
 } satisfies Record<'ja' | 'en', WidgetLabels>
+
+/*!
+ * Toolbar SVG paths are from Lucide Icons.
+ * Lucide: Copyright (c) 2026 Lucide Icons and Contributors, ISC License.
+ * Feather-derived move, square, and trash icons: Copyright (c) 2013-present Cole Bemis, MIT License.
+ * License text: https://github.com/lucide-icons/lucide/blob/main/LICENSE
+ */
+const toolbarIcons = {
+  move: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/><path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/></svg>',
+  pan: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>',
+  rectangle:
+    '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/></svg>',
+  arrow:
+    '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.207 19.793a.707.707 0 0 1-1.207-.5V16a1 1 0 0 0-1-1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1h6a1 1 0 0 0 1-1V4.707a.707.707 0 0 1 1.207-.5l6.94 6.94a1.207 1.207 0 0 1 0 1.707z"/></svg>',
+  undo: '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/></svg>',
+  deleteShape:
+    '<svg class="toolbar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+} as const
 
 function widgetTemplate(text: WidgetLabels): string {
   return `
@@ -1190,9 +1165,9 @@ function widgetTemplate(text: WidgetLabels): string {
                             <div class="editor-controls">
                                 <p class="help">${text.editorHelp}</p>
                                 <div class="toolbar" role="toolbar" aria-label="${text.toolbar}">
-                                    <button type="button" data-tool="move" aria-pressed="true">${text.move}</button><button type="button" data-tool="pan" aria-pressed="false">${text.pan}</button><button type="button" data-tool="rectangle" aria-pressed="false">${text.rectangle}</button><button type="button" data-tool="arrow" aria-pressed="false">${text.arrow}</button>
-                                    <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${text.undo}</button><button type="button" data-feedback-delete>${text.deleteSelection}</button><button type="button" data-feedback-clear class="danger">${text.clear}</button>
-                                    <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">−</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">＋</button></div><button type="button" data-feedback-fit-all>${text.fit}</button>
+                                    <button type="button" data-tool="move" aria-pressed="true">${toolbarIcons.move}<span>${text.move}</span></button><button type="button" data-tool="pan" aria-pressed="false">${toolbarIcons.pan}<span>${text.pan}</span></button><button type="button" data-tool="rectangle" aria-pressed="false">${toolbarIcons.rectangle}<span>${text.rectangle}</span></button><button type="button" data-tool="arrow" aria-pressed="false">${toolbarIcons.arrow}<span>${text.arrow}</span></button>
+                                    <span class="separator" aria-hidden="true"></span><button type="button" data-feedback-undo>${toolbarIcons.undo}<span>${text.undo}</span></button><button type="button" data-feedback-delete class="danger">${toolbarIcons.deleteShape}<span>${text.deleteSelection}</span></button>
+                                    <span class="separator" aria-hidden="true"></span><div data-feedback-zoom-controls class="zoom" role="group" aria-label="${text.zoomGroup}"><button type="button" data-feedback-zoom-out aria-label="${text.zoomOut}">−</button><output data-feedback-zoom-level aria-live="polite">100%</output><button type="button" data-feedback-zoom-in aria-label="${text.zoomIn}">＋</button></div>
                                 </div>
                             </div>
                         </section>

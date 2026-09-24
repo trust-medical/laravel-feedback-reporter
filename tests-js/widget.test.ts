@@ -136,7 +136,20 @@ describe('feedback reporter web component', () => {
       Node.DOCUMENT_POSITION_FOLLOWING,
     )
     expect(root?.querySelector('[data-feedback-undo]')).not.toBeNull()
-    expect(root?.querySelector('[data-feedback-delete]')).not.toBeNull()
+    expect(root?.querySelector('[data-feedback-delete]')?.textContent).toBe('図形を削除')
+    expect(root?.querySelector('[data-feedback-clear]')).toBeNull()
+    expect(root?.querySelector('[data-feedback-fit-all]')).toBeNull()
+    expect(root?.querySelectorAll('.toolbar-icon')).toHaveLength(6)
+    for (const selector of [
+      '[data-tool="move"]',
+      '[data-tool="pan"]',
+      '[data-tool="rectangle"]',
+      '[data-tool="arrow"]',
+      '[data-feedback-undo]',
+      '[data-feedback-delete]',
+    ]) {
+      expect(root?.querySelector(selector)?.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
+    }
     expect(root?.querySelector('style')?.textContent).toContain(
       'height: min(48rem, calc(100dvh - 2rem))',
     )
