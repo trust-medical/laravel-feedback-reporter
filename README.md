@@ -7,31 +7,32 @@ A feedback reporting package for Laravel 12 and 13. It combines a secure Laravel
 [![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
-## Current submission model
+## Overview
 
-Laravel Feedback Reporter sends a required message, optional user-provided images, and bounded diagnostic context.
+Laravel Feedback Reporter submits and stores messages, user-provided images, and diagnostic context in a Laravel application.
 
-- A message is required; images are optional.
-- Images are uploaded as ordinary PNG, JPEG, or WebP files.
-- The package does not turn the host page DOM into a screenshot.
-- The official Widget submits every selected image with the `attachment` source.
-- `user_screenshot` is an optional classification for headless clients, not a switch that changes image processing.
-- The removed `automatic_capture` value is rejected.
+- a required feedback message with optional PNG, JPEG, or WebP images;
+- an official `<trust-feedback-reporter>` isolated with Shadow DOM;
+- multiple images, attachment removal, zoom, Move, Hand, Rectangle, Arrow, Undo, and Delete shape;
+- diagnostic context for the page, viewport, screen, browser, and performance;
+- availability rules for environment, authentication, IP/CIDR, Gate, and custom policy;
+- private storage, MIME validation, rate limiting, idempotency, and atomic cleanup;
+- a `FeedbackStored` event for application notifications and workflows.
 
-Because the package does not reconstruct the DOM, cross-origin images, remote stylesheets, canvases, and iframes do not create capture failures or fidelity problems.
+Users select images captured or prepared on their device, add annotations when needed, and submit them as ordinary files.
 
 ### Package layers
 
 | Layer | Provides |
 | --- | --- |
 | Laravel package | Availability checks, ingestion routes, validation, private storage, models, and a stored event |
-| `@trust-medical/feedback-reporter/widget` | Official `<trust-feedback-reporter>` isolated with Shadow DOM |
+| `@trust-medical/feedback-reporter/widget` | Official Japanese/English Web Component |
 | `@trust-medical/feedback-reporter` | Headless TypeScript SDK for custom interfaces |
 | `@trust-medical/feedback-reporter/alpine` | Alpine.js state adapter |
 
-Only the Widget entry loads Konva and the image editor. The headless entry does not bundle Widget code.
+Only the Widget entry loads Konva and the image editor. The headless entry contains only submission and diagnostic collection code.
 
-The package intentionally leaves administration screens, attachment preview/download routes, and notification channels to the application so they can follow application-specific authorization, retention, and delivery requirements.
+The package passes stored data to the application. Review screens, attachment previews and downloads, notification destinations, and retention policies can follow the application's authorization and operational requirements.
 
 ## Requirements
 
@@ -226,7 +227,7 @@ document.body.append(widget)
 
 ## Headless TypeScript SDK
 
-Use the headless entry to build a custom interface without loading Widget code. New integrations should normally submit user-selected images as `attachment` values.
+Use the headless entry to build a custom interface without loading Widget code. Pass user-selected images through `attachments`.
 
 ```ts
 import { createFeedbackReporter } from '@trust-medical/feedback-reporter'
@@ -249,15 +250,6 @@ const response = await reporter.report({
 
 console.log(response.id)
 ```
-
-### Attachment sources
-
-| Value | Current purpose |
-| --- | --- |
-| `attachment` | Normal value for new integrations and the value used by the official Widget |
-| `user_screenshot` | Optional semantic classification when a custom headless UI needs to distinguish screenshots; also the migration target for historical v3 data |
-
-`user_screenshot` does not enable capture or annotation and does not change validation, storage location, or storage behavior. Use `attachment` for normal new integrations, including Widget integrations.
 
 `report()` checks availability before collecting context and submitting. `submit()` skips the availability request, then collects context and submits. `isAvailable()`, `collectContext()`, `initDiagnostics()`, and `destroyDiagnostics()` are also public.
 
@@ -348,10 +340,6 @@ The published `config/feedback-reporter.php` groups settings under:
 - `server_context`: environment, Laravel version, and PHP version switches.
 
 Environment variables are read by the configuration file. Application code should use `config()` so Laravel configuration caching continues to work.
-
-## Upgrading from 3.x
-
-Version 4 removes DOM capture, capture APIs, callbacks, metadata, and capture-only dependencies. Custom integrations pass user-provided files through `attachments`. `automatic_capture` submissions are rejected. The v4 migration irreversibly maps existing `automatic_capture` database rows to `user_screenshot` while preserving historical JSON metadata.
 
 ## Development and security
 
