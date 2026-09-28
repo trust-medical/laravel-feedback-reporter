@@ -1,4 +1,5 @@
 import { sanitizeUrl } from '../sanitizer'
+import { normalizeMaxEntries } from './buffer'
 
 export interface BreadcrumbItem {
   category: 'click' | 'navigation' | 'submit'
@@ -25,7 +26,7 @@ class BreadcrumbsCollector {
       return
     }
 
-    this.maxEntries = maxEntries
+    this.maxEntries = normalizeMaxEntries(maxEntries, 50)
     this.installed = true
     this.subscribers = 1
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { breadcrumbsCollector } from '../resources/js/diagnostics/breadcrumbs'
 import { consoleCollector } from '../resources/js/diagnostics/console'
 import { errorCollector } from '../resources/js/diagnostics/errors'
+import { networkErrorCollector } from '../resources/js/diagnostics/network'
 
 describe('diagnostics collectors', () => {
   afterEach(() => {
@@ -89,5 +90,98 @@ describe('diagnostics collectors', () => {
     expect(crumbs[0]?.data?.id).toBe('submit-button')
 
     document.body.removeChild(btn)
+  })
+})
+
+describe('diagnostics collector hardening', () => {
+  afterEach(() => {
+    errorCollector.destroy()
+    consoleCollector.destroy()
+    networkErrorCollector.destroy()
+    vi.restoreAllMocks()
+  })
+
+  it('falls back to the default buffer size for invalid maxEntries', () => {
+    errorCollector.init(Number.NaN)
+
+    for (let i = 0; i < 30; i++) {
+      errorCollector.add({ type: 'error', message: `Error ${i}`, timestamp: '' })
+    }
+
+    expect(errorCollector.get()).toHaveLength(20)
+  })
+
+  it('does not wrap console twice after another wrapper blocked restoration', () => {
+    const realError = console.error
+    const baseError = vi.fn()
+    console.error = baseError
+    consoleCollector.init(10)
+    const ownWrapper = console.error
+    const laterWrapper = (...args: unknown[]) => ownWrapper(...args)
+    console.error = laterWrapper
+
+    consoleCollector.destroy()
+    expect(console.error).toBe(laterWrapper)
+
+    // A fresh wrapper goes on top; the inactive one underneath only passes calls through.
+    consoleCollector.init(10)
+
+    console.error('once')
+    expect(consoleCollector.get()).toHaveLength(1)
+    expect(baseError).toHaveBeenCalledTimes(1)
+
+    console.error = realError
+  })
+
+  it('bounds serialized console arguments', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    consoleCollector.init(10)
+
+    console.warn(...Array.from({ length: 15 }, (_, i) => ({ index: i, text: 'y'.repeat(2000) })))
+
+    const [entry] = consoleCollector.get()
+    expect(entry?.messages).toHaveLength(11)
+    expect(entry?.messages[10]).toBe('...[5 more arguments]')
+    for (const message of entry?.messages.slice(0, 10) ?? []) {
+      expect(message.length).toBeLessThanOrEqual(500 + '...[TRUNCATED]'.length)
+    }
+  })
+
+  it('records failed fetch requests with sanitized URLs and restores fetch', async () => {
+    const original = window.fetch
+    const stub = vi.fn(async () => new Response('', { status: 500 })) as unknown as typeof fetch
+    window.fetch = stub
+    networkErrorCollector.init(10)
+
+    try {
+      expect(window.fetch).not.toBe(stub)
+      await window.fetch('https://example.com/api/items?token=secret')
+
+      const [entry] = networkErrorCollector.get()
+      expect(entry).toMatchObject({
+        method: 'GET',
+        url: 'https://example.com/api/items',
+        status: 500,
+      })
+
+      networkErrorCollector.destroy()
+      expect(window.fetch).toBe(stub)
+    } finally {
+      window.fetch = original
+    }
+  })
+
+  it('sanitizes script URLs in captured error events', () => {
+    errorCollector.init(10)
+
+    window.dispatchEvent(
+      new ErrorEvent('error', {
+        message: 'Boom',
+        filename: 'https://example.com/app.js?token=secret',
+        error: new Error('Boom'),
+      }),
+    )
+
+    expect(errorCollector.get()[0]?.source).toBe('https://example.com/app.js')
   })
 })

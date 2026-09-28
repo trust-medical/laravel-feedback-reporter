@@ -1,6 +1,6 @@
 {
   "name": "@trust-medical/feedback-reporter",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "private": true,
   "description": "Feedback reporter SDK with manual image uploads, an isolated Web Component, and diagnostic context",
   "keywords": [
@@ -27,20 +27,23 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./alpine": {
-      "import": "./dist/alpine.js",
-      "types": "./dist/alpine.d.ts"
+      "types": "./dist/alpine.d.ts",
+      "import": "./dist/alpine.js"
     },
     "./widget": {
-      "import": "./dist/widget.js",
-      "types": "./dist/widget.d.ts"
+      "types": "./dist/widget.d.ts",
+      "import": "./dist/widget.js"
     }
   },
   "files": [
     "dist"
+  ],
+  "sideEffects": [
+    "./dist/widget.js"
   ],
   "engines": {
     "node": ">=22"

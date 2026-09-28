@@ -58,6 +58,7 @@ export const widgetStyles = `
     textarea::placeholder { color: var(--fbr-muted); }
     .dropzone { display: grid; place-items: center; gap: .5rem; border: 2px dashed var(--fbr-border); border-radius: .75rem; padding: 1.5rem 1rem; color: var(--fbr-muted); text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .dropzone:hover, .dropzone[data-dragging="true"] { border-color: var(--fbr-accent); background: color-mix(in srgb, var(--fbr-accent) 8%, transparent); }
+    .dropzone[data-disabled="true"] { opacity: .5; cursor: not-allowed; pointer-events: none; }
     .dropzone input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .plus { font-size: 1.5rem; }
     .dropzone small { font-size: .75rem; font-weight: 400; }

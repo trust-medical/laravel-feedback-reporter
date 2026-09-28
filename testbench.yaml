@@ -5,6 +5,12 @@ providers:
 migrations:
   - database/migrations
 
+env:
+  - CACHE_STORE=file
+
 workbench:
   start: '/'
   install: true
+  build:
+    - create-sqlite-db
+    - migrate:fresh

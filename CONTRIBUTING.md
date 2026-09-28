@@ -85,15 +85,17 @@ The compiled bundles and TypeScript declarations will be placed in `dist/`.
 
 ## 6. Workbench (Manual Browser Testing)
 
-You can launch an interactive shell in the docker container to start a workbench development server:
+Build the frontend bundle, then start the Workbench server:
 
 ```bash
-make shell
-php artisan serve --host=0.0.0.0 --port=8000
+make build-js
+make serve
+# or: docker compose run --rm --service-ports app vendor/bin/testbench serve --host=0.0.0.0 --port=8000
 ```
 
-Then visit `http://localhost:8000` to test the packaged Web Component, manual image uploads and removal, annotations, hand-tool panning, zoom, and successful submission close behavior.
-The page is development-only, but it deliberately imports the same `dist/widget.js` entry distributed to applications.
+Then visit `http://localhost:8000` to test the packaged Web Component, manual image uploads and removal, annotations, hand-tool panning, zoom, and successful submission close behavior. Set `WORKBENCH_PORT` to publish a different host port.
+
+The Workbench enables the reporter for guests in every environment and serves `dist/widget.js` and Konva through development-only routes, so the page loads the same entry distributed to applications. Never use these settings in an application.
 
 ## 7. Pull Request Checklist
 

@@ -26,8 +26,11 @@
         color-scheme="auto"
     ></trust-feedback-reporter>
 
+    <script type="importmap">
+        { "imports": { "konva": "/workbench-assets/konva/index.js" } }
+    </script>
     <script type="module">
-        import { registerFeedbackReporterElement } from '/dist/widget.js'
+        import { registerFeedbackReporterElement } from '/workbench-assets/dist/widget.js'
 
         registerFeedbackReporterElement()
     </script>

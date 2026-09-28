@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAlpineFeedbackReporter } from '../resources/js/alpine'
+import { ValidationError } from '../resources/js/errors'
 
 describe('createAlpineFeedbackReporter', () => {
   it('manages attachment state properly', () => {
@@ -45,5 +46,50 @@ describe('createAlpineFeedbackReporter', () => {
     expect(adapter.message).toBe('')
     expect(adapter.attachments).toHaveLength(0)
     expect(adapter.isSubmitting).toBe(false)
+  })
+})
+
+describe('createAlpineFeedbackReporter hardening', () => {
+  it('starts with an unknown availability state', () => {
+    expect(createAlpineFeedbackReporter().available).toBeNull()
+  })
+
+  it('reflects failures in state without rethrowing', async () => {
+    const adapter = createAlpineFeedbackReporter()
+    vi.spyOn(adapter.reporter, 'report').mockRejectedValueOnce(
+      new ValidationError('Invalid', { message: ['Required'] }),
+    )
+
+    await expect(adapter.submit()).resolves.toBeNull()
+
+    expect(adapter.errorMessage).toBe('Invalid')
+    expect(adapter.fieldErrors).toEqual({ message: ['Required'] })
+    expect(adapter.lastError).toBeInstanceOf(ValidationError)
+    expect(adapter.isSubmitting).toBe(false)
+  })
+
+  it('reuses the draft ID on retry and rotates it after success', async () => {
+    const adapter = createAlpineFeedbackReporter()
+    const report = vi
+      .spyOn(adapter.reporter, 'report')
+      .mockRejectedValueOnce(new Error('Network'))
+      .mockResolvedValueOnce({ id: '01J8TEST', success: true })
+    const draftId = adapter.clientReportId
+
+    await adapter.submit()
+    await adapter.submit()
+
+    expect(report.mock.calls[0]?.[0].clientReportId).toBe(draftId)
+    expect(report.mock.calls[1]?.[0].clientReportId).toBe(draftId)
+    expect(adapter.clientReportId).not.toBe(draftId)
+  })
+
+  it('tears down diagnostics in destroy', () => {
+    const adapter = createAlpineFeedbackReporter({ diagnostics: { errors: true } })
+    const destroyDiagnostics = vi.spyOn(adapter.reporter, 'destroyDiagnostics')
+
+    adapter.destroy()
+
+    expect(destroyDiagnostics).toHaveBeenCalledOnce()
   })
 })

@@ -5,6 +5,11 @@ interface FeedbackAttachmentInput {
     filename?: string;
 }
 interface UrlSanitizationOptions {
+    /**
+     * Query string handling. Without this option every query parameter is removed.
+     * - `allowlist`: keep only the listed keys.
+     * - `exclude`: keep every parameter except the listed keys.
+     */
     query?: {
         mode: 'exclude' | 'allowlist';
         keys?: string[];
@@ -33,6 +38,23 @@ interface DiagnosticsOptions {
 interface FeedbackSubmitResponse {
     id: string;
     success: boolean;
+    /** True when the server matched an earlier submission with the same client report ID. */
+    duplicate?: boolean;
+}
+/** Server-side limits advertised by the availability endpoint. */
+interface FeedbackLimits {
+    maxFiles: number;
+    maxFileSizeKb: number;
+    maxTotalSizeKb: number;
+    allowedMimes: string[];
+    maxMessageLength: number;
+    maxMetadataBytes: number;
+    maxMetadataDepth: number;
+}
+interface FeedbackAvailability {
+    available: boolean;
+    /** Present only when available. Older servers omit it. */
+    limits?: FeedbackLimits;
 }
 interface FeedbackReporterCallbacks {
     onContextCollected?: (context: Record<string, unknown>) => void;
@@ -50,12 +72,20 @@ interface FeedbackReporterConfig {
     metadata?: Record<string, unknown> | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
     diagnostics?: DiagnosticsOptions;
     callbacks?: FeedbackReporterCallbacks;
+    /** Request timeout in milliseconds for availability checks and submissions. 0 disables it. Default: 60000. */
+    timeoutMs?: number;
 }
 interface FeedbackReportOptions {
     message: string;
     attachments?: FeedbackAttachmentInput[];
     metadata?: Record<string, unknown> | (() => Record<string, unknown> | Promise<Record<string, unknown>>);
     signal?: AbortSignal;
+    /**
+     * Idempotency key (`^[A-Za-z0-9_-]{8,64}$`). Reuse the same value when retrying the
+     * same report so the server returns the stored report instead of creating a duplicate.
+     * A new key is generated when omitted.
+     */
+    clientReportId?: string;
 }
 interface DiagnosticContext {
     page?: Record<string, unknown>;
@@ -73,4 +103,4 @@ interface DiagnosticContext {
     application?: Record<string, unknown>;
 }
 
-export type { DiagnosticContext as D, FeedbackReporterConfig as F, StorageOptions as S, UrlSanitizationOptions as U, FeedbackAttachmentInput as a, FeedbackSubmitResponse as b, DiagnosticsOptions as c, FeedbackImageSource as d, FeedbackReportOptions as e, FeedbackReporterCallbacks as f };
+export type { DiagnosticContext as D, FeedbackReporterConfig as F, StorageOptions as S, UrlSanitizationOptions as U, FeedbackAttachmentInput as a, FeedbackSubmitResponse as b, FeedbackLimits as c, FeedbackAvailability as d, DiagnosticsOptions as e, FeedbackImageSource as f, FeedbackReportOptions as g, FeedbackReporterCallbacks as h };

@@ -44,6 +44,9 @@ abstract class TestCase extends OrchestraTestCase
         // Setup app key for encryption and session middleware
         $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
 
+        // Keep rate limiter state in memory, independent of any Workbench .env
+        $app['config']->set('cache.default', 'array');
+
         // Setup default database to use sqlite :memory:
         $app['config']->set('database.default', 'testbench');
         $app['config']->set('database.connections.testbench', [

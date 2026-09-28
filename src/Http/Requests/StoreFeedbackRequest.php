@@ -8,10 +8,19 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
+use Symfony\Component\Mime\MimeTypes;
 use TrustMedical\FeedbackReporter\Enums\AttachmentSource;
+use TrustMedical\FeedbackReporter\Support\FeedbackLimits;
+use TrustMedical\FeedbackReporter\Support\ImageDimensionReader;
+use TrustMedical\FeedbackReporter\Support\MetadataSanitizer;
 
 class StoreFeedbackRequest extends FormRequest
 {
+    /**
+     * Upper bound for viewport and screen dimensions.
+     */
+    private const MAX_DIMENSION = 100000;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -27,48 +36,38 @@ class StoreFeedbackRequest extends FormRequest
      */
     public function rules(): array
     {
-        $maxFiles = (int) config('feedback-reporter.attachments.max_files', 5);
-        $maxFileSizeKb = (int) config('feedback-reporter.attachments.max_file_size_kb', 5120);
+        $allowedMimes = FeedbackLimits::allowedMimes();
 
-        /** @var array<int, string> $allowedMimes */
-        $allowedMimes = config('feedback-reporter.attachments.allowed_mimes', [
-            'image/png',
-            'image/jpeg',
-            'image/webp',
-        ]);
+        $fileRules = [
+            'required',
+            'file',
+            'image',
+            'max:'.FeedbackLimits::maxFileSizeKb(),
+        ];
 
-        // Convert MIME types to extension list for mimes rule
-        $extensions = array_map(function (string $mime): string {
-            return match ($mime) {
-                'image/png' => 'png',
-                'image/jpeg' => 'jpeg,jpg',
-                'image/webp' => 'webp',
-                'image/gif' => 'gif',
-                default => ltrim(strrchr($mime, '/') ?: '', '/'),
-            };
-        }, $allowedMimes);
-        $mimesRule = implode(',', array_filter($extensions));
+        // Convert MIME types to an extension list for the mimes rule.
+        // With no allowed MIME types, the real MIME check in after() rejects every file.
+        $extensions = $this->extensionsFor($allowedMimes);
+        if ($extensions !== []) {
+            $fileRules[] = 'mimes:'.implode(',', $extensions);
+        }
+
+        $dimensionRules = ['nullable', 'integer', 'min:0', 'max:'.self::MAX_DIMENSION];
 
         return [
-            'client_report_id' => ['nullable', 'string', 'max:64', 'unique:feedback_reports,client_report_id'],
-            'message' => ['required', 'string', 'max:10000'],
-            'page_url' => ['nullable', 'string', 'max:2048'],
+            'client_report_id' => ['nullable', 'string', 'regex:/^[A-Za-z0-9_-]{8,64}$/'],
+            'message' => ['required', 'string', 'max:'.FeedbackLimits::MAX_MESSAGE_LENGTH],
+            'page_url' => ['nullable', 'string', 'max:2048', 'url:http,https'],
             'page_title' => ['nullable', 'string', 'max:255'],
-            'viewport_width' => ['nullable', 'integer', 'min:0'],
-            'viewport_height' => ['nullable', 'integer', 'min:0'],
-            'screen_width' => ['nullable', 'integer', 'min:0'],
-            'screen_height' => ['nullable', 'integer', 'min:0'],
+            'viewport_width' => $dimensionRules,
+            'viewport_height' => $dimensionRules,
+            'screen_width' => $dimensionRules,
+            'screen_height' => $dimensionRules,
             'locale' => ['nullable', 'string', 'max:32'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', 'timezone:all'],
             'metadata' => ['nullable'],
-            'attachments' => ['nullable', 'array', "max:{$maxFiles}"],
-            'attachments.*.file' => [
-                'required',
-                'file',
-                'image',
-                "mimes:{$mimesRule}",
-                "max:{$maxFileSizeKb}",
-            ],
+            'attachments' => ['nullable', 'array', 'max:'.FeedbackLimits::maxFiles()],
+            'attachments.*.file' => $fileRules,
             'attachments.*.source' => [
                 'required',
                 'string',
@@ -94,41 +93,89 @@ class StoreFeedbackRequest extends FormRequest
                 );
             }
 
+            $metadataError = MetadataSanitizer::validate(
+                $this->input('metadata'),
+                FeedbackLimits::maxMetadataBytes(),
+                FeedbackLimits::maxMetadataDepth(),
+            );
+            if ($metadataError !== null) {
+                $validator->errors()->add('metadata', $metadataError);
+            }
+
             if (is_array($attachments)) {
-                $maxTotalKb = (int) config('feedback-reporter.attachments.max_total_size_kb', 20480);
-                $maxTotalBytes = $maxTotalKb * 1024;
-                $totalBytes = 0;
+                $this->validateAttachments($validator, $attachments);
+            }
+        });
+    }
 
-                /** @var array<int, string> $allowedMimes */
-                $allowedMimes = config('feedback-reporter.attachments.allowed_mimes', [
-                    'image/png',
-                    'image/jpeg',
-                    'image/webp',
-                ]);
+    /**
+     * Validate real MIME types, pixel counts, and the combined size of attachments.
+     *
+     * @param  array<mixed>  $attachments
+     */
+    private function validateAttachments(Validator $validator, array $attachments): void
+    {
+        $maxTotalKb = FeedbackLimits::maxTotalSizeKb();
+        $allowedMimes = FeedbackLimits::allowedMimes();
+        $maxPixels = FeedbackLimits::maxPixels();
+        $totalBytes = 0;
 
-                foreach ($attachments as $index => $item) {
-                    $file = is_array($item) ? ($item['file'] ?? null) : $item;
-                    if ($file instanceof UploadedFile) {
-                        $totalBytes += $file->getSize() ?: 0;
+        foreach ($attachments as $index => $item) {
+            $file = is_array($item) ? ($item['file'] ?? null) : $item;
+            if (! $file instanceof UploadedFile) {
+                continue;
+            }
 
-                        // Verify real MIME type using finfo / getMimeType
-                        $realMime = $file->getMimeType();
-                        if ($realMime === null || ! in_array($realMime, $allowedMimes, true)) {
-                            $validator->errors()->add(
-                                "attachments.{$index}.file",
-                                "The attachment MIME type ({$realMime}) is not permitted."
-                            );
-                        }
-                    }
-                }
+            $totalBytes += $file->getSize() ?: 0;
 
-                if ($totalBytes > $maxTotalBytes) {
+            // Verify real MIME type using finfo / getMimeType
+            $realMime = $file->getMimeType();
+            if ($realMime === null || ! in_array($realMime, $allowedMimes, true)) {
+                $validator->errors()->add(
+                    "attachments.{$index}.file",
+                    "The attachment MIME type ({$realMime}) is not permitted."
+                );
+
+                continue;
+            }
+
+            if ($maxPixels !== null) {
+                $realPath = $file->getRealPath();
+                $dimensions = $realPath ? ImageDimensionReader::read($realPath) : ['width' => null, 'height' => null];
+
+                if ($dimensions['width'] !== null && $dimensions['height'] !== null
+                    && $maxPixels < $dimensions['width'] * $dimensions['height']) {
                     $validator->errors()->add(
-                        'attachments',
-                        "The total size of all attachments exceeds {$maxTotalKb} KB."
+                        "attachments.{$index}.file",
+                        "The attachment exceeds the maximum of {$maxPixels} pixels."
                     );
                 }
             }
-        });
+        }
+
+        if ($totalBytes > $maxTotalKb * 1024) {
+            $validator->errors()->add(
+                'attachments',
+                "The total size of all attachments exceeds {$maxTotalKb} KB."
+            );
+        }
+    }
+
+    /**
+     * Resolve file extensions for the given MIME types.
+     *
+     * @param  array<int, string>  $mimes
+     * @return array<int, string>
+     */
+    private function extensionsFor(array $mimes): array
+    {
+        $extensions = [];
+        foreach ($mimes as $mime) {
+            foreach (MimeTypes::getDefault()->getExtensions($mime) as $extension) {
+                $extensions[] = $extension;
+            }
+        }
+
+        return array_values(array_unique($extensions));
     }
 }

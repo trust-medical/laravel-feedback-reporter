@@ -12,10 +12,18 @@ class StoreFeedbackController
 {
     public function __invoke(StoreFeedbackRequest $request, StoreFeedbackReport $action): JsonResponse
     {
-        $report = $action->execute($request->validated(), $request);
+        $result = $action->handle($request->validated(), $request);
+
+        if (! $result->created) {
+            return response()->json([
+                'id' => $result->report->id,
+                'success' => true,
+                'duplicate' => true,
+            ], 200);
+        }
 
         return response()->json([
-            'id' => $report->id,
+            'id' => $result->report->id,
             'success' => true,
         ], 201);
     }

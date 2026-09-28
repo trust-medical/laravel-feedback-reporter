@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    # Weekly run so new advisories are caught between changes.
+    - cron: '0 3 * * 1'
 
 permissions:
   contents: read
@@ -43,8 +46,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          composer require "illuminate/support:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
+          composer require "laravel/framework:${{ matrix.laravel }}" "orchestra/testbench:${{ matrix.testbench }}" --no-interaction --no-update
           composer update --prefer-dist --no-interaction --no-progress
+
+      - name: Audit resolved dependencies
+        run: composer audit
 
       - name: Execute Pest Tests
         run: vendor/bin/pest

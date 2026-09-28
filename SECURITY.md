@@ -30,8 +30,8 @@ This project is maintained on a best-effort basis. The maintainers will:
 ## Supply Chain Security Practices
 
 To safeguard users and downstream applications from supply chain attacks, this project enforces:
-- **Dependency Auditing**: Automated `composer audit` and `npm audit` on every commit and pull request.
+- **Dependency Auditing**: CI runs `composer audit` (on the lock file and on each resolved Laravel matrix) and `npm audit --audit-level=high` on pushes to `main`, on pull requests, and weekly. High and critical npm advisories fail the build.
 - **CI/CD Least Privilege**: GitHub Actions runs with read-only permissions (`permissions: contents: read`) by default.
 - **Action Pinning**: All third-party GitHub Actions are pinned to immutable commit SHAs.
 - **Strict Plugin Allowlisting**: Composer plugins are strictly allowlisted; unauthorized plugin execution is denied.
-- **Continuous Monitoring**: Dependabot automates security advisory monitoring and timely dependency updates across Composer, npm, and GitHub Actions.
+- **Continuous Monitoring**: Dependabot opens weekly version updates for Composer, npm, and GitHub Actions, and Dependabot alerts report known advisories.
