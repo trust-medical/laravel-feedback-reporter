@@ -92,3 +92,18 @@ it('supports custom route callback in FeedbackReporter::routes', function () {
         ->assertStatus(200)
         ->assertJson(['status' => 'ok']);
 });
+
+it('rate limits the availability endpoint independently of submissions', function () {
+    config([
+        'feedback-reporter.rate_limit.availability_max_attempts' => 2,
+        'feedback-reporter.rate_limit.max_attempts' => 1,
+    ]);
+
+    $availabilityUrl = route('feedback-reporter.availability');
+
+    $this->getJson($availabilityUrl)->assertStatus(200);
+    $this->getJson($availabilityUrl)->assertStatus(200);
+    $this->getJson($availabilityUrl)->assertStatus(429);
+
+    $this->postJson(route('feedback-reporter.store'), [])->assertStatus(422);
+});

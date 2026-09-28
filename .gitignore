@@ -5,3 +5,7 @@
 /storage/logs
 .DS_Store
 *.log
+.env
+.env.*
+/coverage
+.phpunit.result.cache

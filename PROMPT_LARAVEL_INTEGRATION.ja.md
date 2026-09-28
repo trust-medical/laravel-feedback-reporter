@@ -1,11 +1,11 @@
-# Laravel Feedback Reporter v4.2 導入プロンプト
+# Laravel Feedback Reporter v4.3 導入プロンプト
 
 以下をAIコーディングアシスタントへの依頼文、または実装チェックリストとして利用してください。
 
 ```markdown
-# Laravel Feedback Reporter v4.2を導入する
+# Laravel Feedback Reporter v4.3を導入する
 
-このLaravelアプリケーションへ `trust-medical/laravel-feedback-reporter:^4.2` と `@trust-medical/feedback-reporter@^4.2` を導入してください。v4はmessageを必須とし、利用者がパソコンや携帯で撮影したスクリーンショットをuploadする方式です。画像は任意です。DOMの自動画像化やv3以前のcapture動作は実装しないでください。
+このLaravelアプリケーションへ `trust-medical/laravel-feedback-reporter:^4.3` と `@trust-medical/feedback-reporter`（Git tag `v4.3.0` からinstall）を導入してください。どちらもPackagistやnpm registryではなくGitHubから配布されます。v4はmessageを必須とし、利用者がパソコンや携帯で撮影したスクリーンショットをuploadする方式です。画像は任意です。DOMの自動画像化やv3以前のcapture動作は実装しないでください。
 
 ## 最初にapplicationを確認する
 
@@ -14,7 +14,7 @@
 - PHP 8.3以上とfileinfo、json、mbstring、PDO
 - Laravel 12または13とComposer 2
 - CHAR(26) ULIDとJSONを扱えるdatabase
-- Widgetまたはheadless SDKをbundleする場合はNode.js 20以上
+- Widgetまたはheadless SDKをbundleする場合はNode.js 22以上
 - install済みpackageのversionとapplication固有の規約
 
 共通Blade componentとVite entryの配置、reporterを表示する一般画面・管理画面のlayout、support dataを保護するguard・role・Gate・policyを調査してください。guestからの報告を許可するか、許可するenvironment・networkも確認します。非公開storage disk、trusted proxy、queue、notification、管理画面framework、test構成も把握してください。
@@ -23,10 +23,10 @@
 
 ## バックエンドを導入する
 
-1. packageをinstallし、configをpublishしてmigrateします。
+1. applicationの `composer.json` にGitHubのVCS repository（`"repositories": [{"type": "vcs", "url": "https://github.com/trust-medical/laravel-feedback-reporter"}]`）を追加してから、packageをinstallし、configをpublishしてmigrateします。
 
    ```bash
-   composer require trust-medical/laravel-feedback-reporter:^4.2
+   composer require trust-medical/laravel-feedback-reporter:^4.3
    php artisan vendor:publish --tag=feedback-reporter-config
    php artisan migrate
    ```
@@ -48,10 +48,10 @@ security boundaryは三層目です。client側の非表示はserver認可の代
 
 ## 公式Widgetを追加する
 
-frontend packageをinstallします。
+Git tagを指定してfrontend packageをinstallします。import名は `@trust-medical/feedback-reporter` のままです。
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4.2
+npm install github:trust-medical/laravel-feedback-reporter#v4.3.0
 ```
 
 custom elementの登録だけを行う小さなVite entryを1つ作ります。

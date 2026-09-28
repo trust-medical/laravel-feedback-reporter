@@ -69,10 +69,23 @@ class FeedbackReporterServiceProvider extends ServiceProvider
             $maxAttempts = (int) config('feedback-reporter.rate_limit.max_attempts', 10);
             $decayMinutes = (int) config('feedback-reporter.rate_limit.decay_minutes', 1);
 
-            $key = $request->user()?->getAuthIdentifier() ?? $request->ip() ?? 'anonymous';
-
-            return Limit::perMinutes($decayMinutes, $maxAttempts)->by((string) $key);
+            return Limit::perMinutes($decayMinutes, $maxAttempts)->by($this->rateLimitKey($request));
         });
+
+        RateLimiter::for('feedback-reporter-availability', function (Request $request): Limit {
+            $maxAttempts = (int) config('feedback-reporter.rate_limit.availability_max_attempts', 60);
+            $decayMinutes = (int) config('feedback-reporter.rate_limit.availability_decay_minutes', 1);
+
+            return Limit::perMinutes($decayMinutes, $maxAttempts)->by($this->rateLimitKey($request));
+        });
+    }
+
+    /**
+     * Resolve the rate limiter key for the given request.
+     */
+    protected function rateLimitKey(Request $request): string
+    {
+        return (string) ($request->user()?->getAuthIdentifier() ?? $request->ip() ?? 'anonymous');
     }
 
     /**

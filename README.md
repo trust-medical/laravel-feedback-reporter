@@ -39,14 +39,27 @@ The package passes stored data to the application. Review screens, attachment pr
 - PHP 8.3 or later
 - Laravel 12 or 13
 - Composer 2
-- Node.js 20 or later when using the TypeScript SDK or Web Component
+- Node.js 22 or later when using the TypeScript SDK or Web Component
 
 ## Installation
 
-Install the Laravel package:
+The package is distributed from GitHub rather than Packagist or the npm registry. Add the repository to the application's `composer.json`:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/trust-medical/laravel-feedback-reporter"
+        }
+    ]
+}
+```
+
+Then install the Laravel package. Composer resolves versions from the repository's Git tags:
 
 ```bash
-composer require trust-medical/laravel-feedback-reporter:^4.2
+composer require trust-medical/laravel-feedback-reporter:^4.3
 php artisan vendor:publish --tag=feedback-reporter-config
 ```
 
@@ -65,11 +78,13 @@ Enable reporting in `.env`:
 FEEDBACK_REPORTER_ENABLED=true
 ```
 
-Install the frontend package when using the Widget or headless SDK:
+Install the frontend package from a Git tag when using the Widget or headless SDK:
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4.2
+npm install github:trust-medical/laravel-feedback-reporter#v4.3.0
 ```
+
+The package keeps its `@trust-medical/feedback-reporter` import name. npm pins the Git tag instead of a semver range, so change the tag explicitly when upgrading.
 
 Layouts that submit from the frontend must provide Laravel's CSRF token:
 
@@ -86,7 +101,7 @@ The default configuration allows authenticated users in the `local` and `staging
 - authentication requirement;
 - IP/CIDR denylist, then allowlist;
 - optional Laravel Gate;
-- optional class implementing `FeedbackAvailability`.
+- optional class implementing `FeedbackAvailability`. A configured class that does not implement the contract makes the reporter unavailable.
 
 Review `config/feedback-reporter.php` before enabling the package outside local development. Returning 404 for unavailable requests is the default and avoids advertising the endpoint.
 
@@ -97,7 +112,7 @@ The default routes are:
 | `GET` | `/feedback-reporter/availability` | `feedback-reporter.availability` | Returns `{"available": true|false}` |
 | `POST` | `/feedback-reporter/reports` | `feedback-reporter.store` | Validates and stores a report |
 
-The POST route applies the availability middleware and the `feedback-reporter` rate limiter. The default limit is ten submissions per minute, keyed by authenticated user ID or client IP.
+The POST route applies the availability middleware and the `feedback-reporter` rate limiter. The default limit is ten submissions per minute, keyed by authenticated user ID or client IP. The GET route uses a separate `feedback-reporter-availability` limiter, sixty checks per minute by default, so availability checks do not consume the submission limit.
 
 Route prefix, name prefix, domain, middleware, and individual paths are configurable. To own route registration, set `FEEDBACK_REPORTER_REGISTER_ROUTES=false` or call `FeedbackReporter::ignoreRoutes()`, then register the package routes with application-specific options:
 
@@ -333,7 +348,7 @@ The published `config/feedback-reporter.php` groups settings under:
 - `enabled`: master switch;
 - `availability`: environments, authentication, IP rules, Gate, policy, and denial status;
 - `route`: registration, prefix, name prefix, domain, middleware, and paths;
-- `rate_limit`: maximum attempts and decay interval;
+- `rate_limit`: maximum attempts and decay interval for submissions and availability checks;
 - `storage`: private disk and base path;
 - `attachments`: count, size, total size, and allowed MIME types;
 - `metadata`: maximum encoded bytes and nesting depth;

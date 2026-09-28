@@ -1,11 +1,11 @@
-# Laravel Feedback Reporter v4.2 integration prompt
+# Laravel Feedback Reporter v4.3 integration prompt
 
 Copy the prompt below into an AI coding assistant or use it as an implementation checklist.
 
 ```markdown
-# Integrate Laravel Feedback Reporter v4.2
+# Integrate Laravel Feedback Reporter v4.3
 
-Integrate `trust-medical/laravel-feedback-reporter:^4.2` and `@trust-medical/feedback-reporter@^4.2` into this Laravel application. Version 4 is message-first: users take screenshots on their computer or phone and upload them. Images are optional. Do not implement DOM screenshot capture or restore pre-v4 capture behavior.
+Integrate `trust-medical/laravel-feedback-reporter:^4.3` and `@trust-medical/feedback-reporter` (installed from the `v4.3.0` Git tag) into this Laravel application. Both packages are distributed from GitHub, not Packagist or the npm registry. Version 4 is message-first: users take screenshots on their computer or phone and upload them. Images are optional. Do not implement DOM screenshot capture or restore pre-v4 capture behavior.
 
 ## Inspect the application first
 
@@ -14,7 +14,7 @@ Before editing, verify:
 - PHP 8.3+ with fileinfo, json, mbstring, and PDO
 - Laravel 12 or 13 and Composer 2
 - a database that supports CHAR(26) ULIDs and JSON
-- Node.js 20+ when bundling the Widget or headless SDK
+- Node.js 22+ when bundling the Widget or headless SDK
 - the installed package versions and the application's local conventions
 
 Inspect where shared Blade components and Vite entries live, which public and administration layouts need the reporter, and which guards, roles, Gates, or policies protect support data. Determine whether guests may report feedback and from which environments or networks. Check the private storage disk, trusted proxies, queue, notifications, administration framework, and test stack.
@@ -23,10 +23,10 @@ If a prerequisite is missing, report it before installing dependencies. Prefer t
 
 ## Install the backend
 
-1. Install the package, publish its config, and migrate:
+1. Add the GitHub VCS repository to the application's `composer.json` (`"repositories": [{"type": "vcs", "url": "https://github.com/trust-medical/laravel-feedback-reporter"}]`), then install the package, publish its config, and migrate:
 
    ```bash
-   composer require trust-medical/laravel-feedback-reporter:^4.2
+   composer require trust-medical/laravel-feedback-reporter:^4.3
    php artisan vendor:publish --tag=feedback-reporter-config
    php artisan migrate
    ```
@@ -48,10 +48,10 @@ The third layer is the security boundary. Client-side hiding never replaces serv
 
 ## Add the official Widget
 
-Install the frontend package:
+Install the frontend package from its Git tag. The import name stays `@trust-medical/feedback-reporter`:
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4.2
+npm install github:trust-medical/laravel-feedback-reporter#v4.3.0
 ```
 
 Create one small Vite entry that only registers the custom element:

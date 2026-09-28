@@ -1,7 +1,25 @@
 {
   "name": "@trust-medical/feedback-reporter",
-  "version": "4.2.1",
+  "version": "4.3.0",
+  "private": true,
   "description": "Feedback reporter SDK with manual image uploads, an isolated Web Component, and diagnostic context",
+  "keywords": [
+    "laravel",
+    "feedback",
+    "bug-report",
+    "screenshot",
+    "web-component",
+    "alpinejs"
+  ],
+  "homepage": "https://github.com/trust-medical/laravel-feedback-reporter#readme",
+  "bugs": {
+    "url": "https://github.com/trust-medical/laravel-feedback-reporter/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trust-medical/laravel-feedback-reporter.git"
+  },
+  "author": "Trust Medical <fukuhara@trust-medical.jp>",
   "license": "MIT",
   "type": "module",
   "main": "./dist/index.js",
@@ -24,6 +42,9 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc --noEmit",

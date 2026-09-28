@@ -96,6 +96,12 @@ return [
 
         'decay_minutes' => 1,
 
+        // Separate limit for the availability check so page loads do not
+        // consume the submission budget.
+        'availability_max_attempts' => 60,
+
+        'availability_decay_minutes' => 1,
+
     ],
 
     /*

@@ -2,6 +2,22 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 4.3.0 - 2026-09-28
+
+### Added
+- Published the repository on GitHub. The Laravel and frontend packages are installed from GitHub via a Composer VCS repository and an npm Git tag.
+- Added a separate `feedback-reporter-availability` rate limiter for the availability endpoint, configured by `rate_limit.availability_max_attempts` (default 60) and `rate_limit.availability_decay_minutes` (default 1).
+- Added a Code of Conduct, issue and pull request templates, and `.gitattributes` export rules that exclude development files from installed archives.
+
+### Changed
+- CI now runs PHP 8.3–8.5 and Node.js 22/24, runs Biome, and fails when the committed `dist/` does not match a fresh build.
+- The frontend package now requires Node.js 22 or later (`engines.node >=22`) because Node.js 20 has reached end of life.
+- Updated the security contact and supported versions, and described the vulnerability response as best effort.
+
+### Security
+- A configured `availability.policy` that does not implement `FeedbackAvailability` now makes the reporter unavailable instead of being ignored.
+- The availability endpoint is now rate limited.
+
 ## 4.2.1 - 2026-09-24
 
 ### Changed

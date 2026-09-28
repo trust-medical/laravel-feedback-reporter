@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-We actively provide security patches and dependency updates for the following versions:
+Security fixes and dependency updates are provided for the following versions:
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 1.x     | :white_check_mark: |
-| < 1.0   | :x:                |
+| 4.x     | :white_check_mark: |
+| < 4.0   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -16,15 +16,16 @@ We actively provide security patches and dependency updates for the following ve
 If you discover a security vulnerability within `laravel-feedback-reporter`, please report it responsibly:
 
 1. **GitHub Private Vulnerability Reporting**: Use the "Report a vulnerability" button under the **Security** tab of the repository.
-2. **Email**: Alternatively, send an email to `dev@trustmedical.example.com` with:
+2. **Email**: Alternatively, send an email to `fukuhara@trust-medical.jp` with:
    - A clear description of the vulnerability.
    - Step-by-step instructions or a minimal proof of concept (PoC) to reproduce the issue.
    - Affected versions and environments.
 
-### Response Timeline
-- **Acknowledgement**: Within 48 hours.
-- **Assessment & Triage**: Within 5 business days.
-- **Fix & Advisory Release**: Coordinated release with CVE assignment where appropriate.
+### Response
+This project is maintained on a best-effort basis. The maintainers will:
+- acknowledge and triage reports as promptly as possible;
+- keep the reporter informed while a fix is prepared;
+- publish a fix and a GitHub Security Advisory in coordination with the reporter, and request a CVE when appropriate.
 
 ## Supply Chain Security Practices
 

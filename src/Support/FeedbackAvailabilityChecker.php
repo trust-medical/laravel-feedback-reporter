@@ -73,7 +73,9 @@ class FeedbackAvailabilityChecker
         $policyClass = config('feedback-reporter.availability.policy');
         if ($policyClass !== null) {
             $policyInstance = is_string($policyClass) ? app($policyClass) : $policyClass;
-            if ($policyInstance instanceof FeedbackAvailability && ! $policyInstance->isAvailable($request)) {
+
+            // Fail closed when the configured policy does not implement the contract.
+            if (! $policyInstance instanceof FeedbackAvailability || ! $policyInstance->isAvailable($request)) {
                 return false;
             }
         }

@@ -39,14 +39,27 @@ packageは保存後のdataをapplicationへ渡し、review画面、添付画像�
 - PHP 8.3以上
 - Laravel 12または13
 - Composer 2
-- TypeScript SDKまたはWeb Componentを使う場合はNode.js 20以上
+- TypeScript SDKまたはWeb Componentを使う場合はNode.js 22以上
 
 ## インストール
 
-Laravel packageをインストールします。
+このpackageはPackagistやnpm registryではなくGitHubから配布します。applicationの `composer.json` にrepositoryを追加します。
+
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/trust-medical/laravel-feedback-reporter"
+        }
+    ]
+}
+```
+
+Laravel packageをインストールします。versionはrepositoryのGit tagから解決されます。
 
 ```bash
-composer require trust-medical/laravel-feedback-reporter:^4.2
+composer require trust-medical/laravel-feedback-reporter:^4.3
 php artisan vendor:publish --tag=feedback-reporter-config
 ```
 
@@ -65,11 +78,13 @@ publishしない場合は、そのまま `php artisan migrate` を実行しま�
 FEEDBACK_REPORTER_ENABLED=true
 ```
 
-Widgetまたはheadless SDKを使う場合はfrontend packageも追加します。
+Widgetまたはheadless SDKを使う場合は、Git tagを指定してfrontend packageも追加します。
 
 ```bash
-npm install @trust-medical/feedback-reporter@^4.2
+npm install github:trust-medical/laravel-feedback-reporter#v4.3.0
 ```
+
+import名は `@trust-medical/feedback-reporter` のままです。npmはsemver範囲ではなくGit tagを固定するため、更新時はtagを明示的に変更してください。
 
 frontendからPOSTするlayoutにはLaravelのCSRF tokenを配置します。
 
@@ -86,7 +101,7 @@ frontendからPOSTするlayoutにはLaravelのCSRF tokenを配置します。
 - 認証要件
 - IP/CIDRのdenylist、続いてallowlist
 - 任意のLaravel Gate
-- 任意の `FeedbackAvailability` 実装class
+- 任意の `FeedbackAvailability` 実装class。設定したclassがcontractを実装していない場合は利用不可になります
 
 local開発以外で有効化する前に、`config/feedback-reporter.php` を確認してください。利用不可時は404を返し、endpointの存在を公開しない設定が既定です。
 
@@ -97,7 +112,7 @@ local開発以外で有効化する前に、`config/feedback-reporter.php` を�
 | `GET` | `/feedback-reporter/availability` | `feedback-reporter.availability` | `{"available": true|false}` を返す |
 | `POST` | `/feedback-reporter/reports` | `feedback-reporter.store` | reportを検証・保存する |
 
-POST routeには利用可否middlewareと `feedback-reporter` rate limiterが適用されます。既定値は1分あたり10回で、認証済みuser IDまたはclient IPをkeyにします。
+POST routeには利用可否middlewareと `feedback-reporter` rate limiterが適用されます。既定値は1分あたり10回で、認証済みuser IDまたはclient IPをkeyにします。GET routeには別の `feedback-reporter-availability` rate limiter（既定値は1分あたり60回）が適用されるため、利用可否の確認で送信回数の上限を消費しません。
 
 route prefix、name prefix、domain、middleware、個別pathは変更できます。application側でroute登録を管理する場合は、`FEEDBACK_REPORTER_REGISTER_ROUTES=false` を設定するか `FeedbackReporter::ignoreRoutes()` を呼び、application固有のoptionで登録します。
 
@@ -333,7 +348,7 @@ publishされる `config/feedback-reporter.php` は次のgroupで構成されま
 - `enabled`: master switch
 - `availability`: 環境、認証、IP規則、Gate、policy、拒否status
 - `route`: 登録、prefix、name prefix、domain、middleware、path
-- `rate_limit`: 最大試行回数と減衰時間
+- `rate_limit`: 送信と利用可否確認それぞれの最大試行回数と減衰時間
 - `storage`: 非公開diskとbase path
 - `attachments`: 枚数、1枚のsize、合計size、許可MIME
 - `metadata`: 最大encode byte数と階層の深さ

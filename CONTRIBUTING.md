@@ -2,6 +2,12 @@
 
 Thank you for contributing to `trust-medical/laravel-feedback-reporter`!
 
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). Please report security vulnerabilities as described in [SECURITY.md](SECURITY.md), not in public issues.
+
+## Before You Start
+
+For anything beyond a small fix, open an issue first so the approach can be agreed on before you write code. Do not include personal or confidential data in issues, screenshots, or logs.
+
 ## 1. Prerequisites (Docker First)
 
 This repository requires only **Docker** and **Docker Compose** on your local machine. You do not need PHP, Composer, or Node.js installed on your host system.
@@ -97,5 +103,5 @@ The page is development-only, but it deliberately imports the same `dist/widget.
 4. [ ] TypeScript passes without errors (`npm run typecheck`).
 5. [ ] Pint style checks pass (`vendor/bin/pint --test`).
 6. [ ] Biome passes (`npm run lint`).
-7. [ ] The headless, Alpine, and Widget bundles build cleanly (`npm run build`).
+7. [ ] The headless, Alpine, and Widget bundles build cleanly and the rebuilt `dist/` is committed (`npm run build`). CI fails when `dist/` is out of date because it is the distributed frontend package.
 8. [ ] Dependency audits pass (`composer audit` and `npm run audit`).

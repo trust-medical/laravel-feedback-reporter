@@ -11,6 +11,7 @@ $availabilityPath = (string) config('feedback-reporter.route.paths.availability'
 $storePath = (string) config('feedback-reporter.route.paths.store', 'reports');
 
 Route::get($availabilityPath, CheckAvailabilityController::class)
+    ->middleware('throttle:feedback-reporter-availability')
     ->name('availability');
 
 Route::post($storePath, StoreFeedbackController::class)

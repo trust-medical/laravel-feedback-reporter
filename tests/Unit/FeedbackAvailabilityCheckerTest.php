@@ -105,6 +105,26 @@ it('evaluates custom policy implementing FeedbackAvailability', function () {
     expect($this->checker->isAvailable())->toBeTrue();
 });
 
+it('fails closed when the configured policy does not implement FeedbackAvailability', function () {
+    Config::set('feedback-reporter.enabled', true);
+    Config::set('feedback-reporter.availability.environments', ['testing']);
+    Config::set('feedback-reporter.availability.require_authentication', false);
+
+    Config::set('feedback-reporter.availability.policy', new class
+    {
+        public function isAvailable(Request $request): bool
+        {
+            return true;
+        }
+    });
+
+    expect($this->checker->isAvailable())->toBeFalse();
+
+    Config::set('feedback-reporter.availability.policy', stdClass::class);
+
+    expect($this->checker->isAvailable())->toBeFalse();
+});
+
 it('throws AvailabilityException when ensureAvailable fails', function () {
     Config::set('feedback-reporter.enabled', false);
     Config::set('feedback-reporter.availability.disabled_response', 404);
