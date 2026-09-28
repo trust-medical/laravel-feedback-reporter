@@ -7,11 +7,26 @@ namespace TrustMedical\FeedbackReporter\Support;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\IpUtils;
+use Throwable;
 use TrustMedical\FeedbackReporter\Contracts\FeedbackAvailability;
 use TrustMedical\FeedbackReporter\Exceptions\AvailabilityException;
 
 class FeedbackAvailabilityChecker
 {
+    /**
+     * Environments allowed when the published config omits the key.
+     *
+     * @var array<int, string>
+     */
+    private const DEFAULT_ENVIRONMENTS = ['local', 'staging'];
+
+    /**
+     * Status codes allowed for unavailable responses.
+     *
+     * @var array<int, int>
+     */
+    private const ALLOWED_DISABLED_RESPONSES = [403, 404];
+
     /**
      * Determine if the feedback reporter is currently available for the given request.
      */
@@ -26,7 +41,7 @@ class FeedbackAvailabilityChecker
 
         // 2. Environment check
         /** @var array<int, string> $allowedEnvironments */
-        $allowedEnvironments = config('feedback-reporter.availability.environments', []);
+        $allowedEnvironments = config('feedback-reporter.availability.environments', self::DEFAULT_ENVIRONMENTS);
         if (! empty($allowedEnvironments) && ! in_array(app()->environment(), $allowedEnvironments, true)) {
             return false;
         }
@@ -72,7 +87,12 @@ class FeedbackAvailabilityChecker
         /** @var class-string<FeedbackAvailability>|FeedbackAvailability|null $policyClass */
         $policyClass = config('feedback-reporter.availability.policy');
         if ($policyClass !== null) {
-            $policyInstance = is_string($policyClass) ? app($policyClass) : $policyClass;
+            try {
+                $policyInstance = is_string($policyClass) ? app($policyClass) : $policyClass;
+            } catch (Throwable) {
+                // A policy class that cannot be resolved must not make the reporter available
+                return false;
+            }
 
             // Fail closed when the configured policy does not implement the contract.
             if (! $policyInstance instanceof FeedbackAvailability || ! $policyInstance->isAvailable($request)) {
@@ -91,12 +111,20 @@ class FeedbackAvailabilityChecker
     public function ensureAvailable(Request $request): void
     {
         if (! $this->isAvailable($request)) {
-            $status = (int) config('feedback-reporter.availability.disabled_response', 404);
-
             throw new AvailabilityException(
                 message: 'Feedback reporter is currently unavailable.',
-                statusCode: $status,
+                statusCode: $this->disabledResponseStatus(),
             );
         }
+    }
+
+    /**
+     * Resolve the status code for unavailable responses, falling back to 404 for unsupported values.
+     */
+    public function disabledResponseStatus(): int
+    {
+        $status = (int) config('feedback-reporter.availability.disabled_response', 404);
+
+        return in_array($status, self::ALLOWED_DISABLED_RESPONSES, true) ? $status : 404;
     }
 }

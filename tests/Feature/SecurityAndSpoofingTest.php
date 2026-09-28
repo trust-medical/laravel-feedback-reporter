@@ -37,7 +37,9 @@ it('rejects oversized metadata payload', function () {
         'metadata' => json_encode(['data' => $hugeString]),
     ]);
 
-    $response->assertStatus(500); // Exception in MetadataSanitizer
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['metadata']);
+    $this->assertDatabaseCount('feedback_reports', 0);
 });
 
 it('rejects deeply nested metadata structures (JSON bomb protection)', function () {
@@ -54,7 +56,9 @@ it('rejects deeply nested metadata structures (JSON bomb protection)', function 
         'metadata' => json_encode($nested),
     ]);
 
-    $response->assertStatus(500);
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors(['metadata']);
+    $this->assertDatabaseCount('feedback_reports', 0);
 });
 
 it('returns configured disabled_response status when reporter is unavailable', function () {

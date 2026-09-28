@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeUrl, truncateString } from '../resources/js/sanitizer'
+import {
+  safeStringify,
+  sanitizeUrl,
+  sanitizeUrlsInText,
+  truncateString,
+} from '../resources/js/sanitizer'
 
 describe('sanitizer', () => {
   it('strips query parameters and hash by default', () => {
@@ -30,5 +35,30 @@ describe('sanitizer', () => {
     const truncated = truncateString(longStr, 50)
     expect(truncated.length).toBeLessThan(100)
     expect(truncated).toContain('...[TRUNCATED]')
+  })
+})
+
+describe('sanitizer exclude mode and helpers', () => {
+  it('keeps every query parameter except excluded keys', () => {
+    const raw = 'https://example.com/items?page=2&token=secret&sort=asc'
+
+    expect(sanitizeUrl(raw, { query: { mode: 'exclude', keys: ['token'] } })).toBe(
+      'https://example.com/items?page=2&sort=asc',
+    )
+  })
+
+  it('sanitizes URLs embedded in stack traces while keeping line numbers', () => {
+    const stack = 'Error: x\n    at run (https://example.com/app.js?v=1&token=secret:10:5)'
+
+    expect(sanitizeUrlsInText(stack)).toBe('Error: x\n    at run (https://example.com/app.js:10:5)')
+  })
+
+  it('serializes large and circular objects within the length budget', () => {
+    const circular: Record<string, unknown> = { name: 'root' }
+    circular.self = circular
+    const huge = { items: Array.from({ length: 10000 }, (_, i) => ({ i, text: 'x'.repeat(100) })) }
+
+    expect(safeStringify(circular)).toContain('[Circular]')
+    expect(safeStringify(huge, 200).length).toBeLessThanOrEqual(200 + '...[TRUNCATED]'.length)
   })
 })

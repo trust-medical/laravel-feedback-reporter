@@ -125,6 +125,35 @@ it('fails closed when the configured policy does not implement FeedbackAvailabil
     expect($this->checker->isAvailable())->toBeFalse();
 });
 
+it('returns false when the configured policy class cannot be resolved', function () {
+    Config::set('feedback-reporter.enabled', true);
+    Config::set('feedback-reporter.availability.environments', ['testing']);
+    Config::set('feedback-reporter.availability.require_authentication', false);
+    Config::set('feedback-reporter.availability.policy', 'App\\Policies\\MissingFeedbackPolicy');
+
+    expect($this->checker->isAvailable())->toBeFalse();
+});
+
+it('defaults to local and staging when the environments key is missing', function () {
+    Config::set('feedback-reporter.enabled', true);
+    Config::set('feedback-reporter.availability', ['require_authentication' => false]);
+
+    // The test environment is 'testing'
+    expect($this->checker->isAvailable())->toBeFalse();
+});
+
+it('exposes the configured status on AvailabilityException', function () {
+    Config::set('feedback-reporter.enabled', false);
+    Config::set('feedback-reporter.availability.disabled_response', 403);
+
+    try {
+        $this->checker->ensureAvailable(Request::create('/test', 'GET'));
+        $this->fail('Expected exception was not thrown.');
+    } catch (AvailabilityException $e) {
+        expect($e->getStatusCode())->toBe(403);
+    }
+});
+
 it('throws AvailabilityException when ensureAvailable fails', function () {
     Config::set('feedback-reporter.enabled', false);
     Config::set('feedback-reporter.availability.disabled_response', 404);

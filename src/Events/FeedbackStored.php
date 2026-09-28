@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace TrustMedical\FeedbackReporter\Events;
 
+use Illuminate\Contracts\Events\ShouldDispatchAfterCommit;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 use TrustMedical\FeedbackReporter\Models\FeedbackReport;
 
-final class FeedbackStored
+/**
+ * Dispatched after a new feedback report has been committed to the database.
+ */
+final class FeedbackStored implements ShouldDispatchAfterCommit
 {
     use Dispatchable, SerializesModels;
 

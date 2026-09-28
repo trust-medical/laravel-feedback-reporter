@@ -4,17 +4,42 @@ import { breadcrumbsCollector } from './diagnostics/breadcrumbs'
 import { consoleCollector } from './diagnostics/console'
 import { errorCollector } from './diagnostics/errors'
 import { networkErrorCollector } from './diagnostics/network'
-import { AvailabilityError } from './errors'
-import { checkAvailability, sendFeedbackReport } from './transport'
+import { AvailabilityError, ValidationError } from './errors'
+import { createId } from './id'
+import { resolveLimits } from './limits'
+import { fetchAvailability, sendFeedbackReport } from './transport'
 import type {
   DiagnosticContext,
+  FeedbackAvailability,
+  FeedbackLimits,
   FeedbackReporterConfig,
   FeedbackReportOptions,
   FeedbackSubmitResponse,
 } from './types'
 
+const MAX_PAGE_TITLE_LENGTH = 255
+const MAX_PAGE_URL_LENGTH = 2048
+
+function jsonDepth(value: unknown, depth: number = 0): number {
+  if (value === null || typeof value !== 'object') {
+    return depth
+  }
+
+  let deepest = depth + 1
+  for (const child of Array.isArray(value) ? value : Object.values(value)) {
+    deepest = Math.max(deepest, jsonDepth(child, depth + 1))
+  }
+
+  return deepest
+}
+
+function byteLength(value: string): number {
+  return typeof TextEncoder !== 'undefined' ? new TextEncoder().encode(value).length : value.length
+}
+
 export class FeedbackReporter {
   private readonly activeDiagnostics = new Set<'errors' | 'console' | 'network' | 'breadcrumbs'>()
+  private serverLimits: FeedbackLimits | null = null
 
   constructor(private readonly config: FeedbackReporterConfig = {}) {
     if (this.config.diagnostics) {
@@ -60,8 +85,35 @@ export class FeedbackReporter {
     if (this.activeDiagnostics.delete('breadcrumbs')) breadcrumbsCollector.destroy()
   }
 
+  /**
+   * Return whether the reporter is available. Any failure is reported as `false`.
+   */
   public async isAvailable(signal?: AbortSignal): Promise<boolean> {
-    return checkAvailability(this.config, signal)
+    try {
+      return (await this.getAvailability(signal)).available
+    } catch (err) {
+      if (signal?.aborted) {
+        throw err
+      }
+      return false
+    }
+  }
+
+  /**
+   * Fetch availability and the server's limits. Rate limiting, timeouts, and network
+   * failures are thrown as errors. The returned limits are reused by `submit()`.
+   */
+  public async getAvailability(signal?: AbortSignal): Promise<FeedbackAvailability> {
+    const availability = await fetchAvailability(this.config, signal)
+    if (availability.limits) {
+      this.serverLimits = availability.limits
+    }
+    return availability
+  }
+
+  /** The limits last advertised by the server, or the package defaults. */
+  public getLimits(): FeedbackLimits {
+    return resolveLimits(this.serverLimits)
   }
 
   public async collectContext(): Promise<DiagnosticContext> {
@@ -71,19 +123,40 @@ export class FeedbackReporter {
   }
 
   public async submit(options: FeedbackReportOptions): Promise<FeedbackSubmitResponse> {
-    const signal = options.signal
-    const attachments = options.attachments || []
+    this.config.callbacks?.onSubmitStart?.()
 
-    const preparedAttachments = prepareAttachments(attachments)
+    try {
+      const formData = await this.buildFormData(options)
+      const response = await sendFeedbackReport(formData, this.config, options.signal)
+      this.config.callbacks?.onSubmitSuccess?.(response)
+      return response
+    } catch (err) {
+      this.config.callbacks?.onSubmitError?.(err)
+      throw err
+    }
+  }
+
+  public async report(options: FeedbackReportOptions): Promise<FeedbackSubmitResponse> {
+    const signal = options.signal
+
+    // 1. Check availability
+    const availability = await this.getAvailability(signal)
+    if (!availability.available) {
+      // The server answered successfully that the reporter is not available.
+      throw new AvailabilityError('Feedback reporter is currently unavailable.', 200)
+    }
+
+    return this.submit(options)
+  }
+
+  private async buildFormData(options: FeedbackReportOptions): Promise<FormData> {
+    const limits = this.getLimits()
+    const preparedAttachments = prepareAttachments(options.attachments || [], limits)
 
     const formData = new FormData()
 
-    // 1. Client idempotency key
-    const clientReportId =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-    formData.append('client_report_id', clientReportId)
+    // 1. Client idempotency key (reuse it when retrying the same report)
+    formData.append('client_report_id', options.clientReportId || createId())
 
     // 2. Message
     formData.append('message', options.message)
@@ -108,12 +181,16 @@ export class FeedbackReporter {
       ...(customMeta ? { report_metadata: customMeta } : {}),
     }
 
-    formData.append('metadata', JSON.stringify(finalMetadata))
+    formData.append('metadata', this.encodeMetadata(finalMetadata, limits))
 
-    // 5. Page context shortcuts for DB columns
+    // 5. Page context shortcuts for DB columns (truncated to the server's column limits)
     if (context.page) {
-      if (context.page.url) formData.append('page_url', String(context.page.url))
-      if (context.page.title) formData.append('page_title', String(context.page.title))
+      if (context.page.url) {
+        formData.append('page_url', String(context.page.url).slice(0, MAX_PAGE_URL_LENGTH))
+      }
+      if (context.page.title) {
+        formData.append('page_title', String(context.page.title).slice(0, MAX_PAGE_TITLE_LENGTH))
+      }
     }
     if (context.viewport) {
       if (context.viewport.viewport_width !== undefined)
@@ -136,28 +213,27 @@ export class FeedbackReporter {
       // Ignore
     }
 
-    // 6. Send
-    this.config.callbacks?.onSubmitStart?.()
-    try {
-      const response = await sendFeedbackReport(formData, this.config, signal)
-      this.config.callbacks?.onSubmitSuccess?.(response)
-      return response
-    } catch (err) {
-      this.config.callbacks?.onSubmitError?.(err)
-      throw err
-    }
+    return formData
   }
 
-  public async report(options: FeedbackReportOptions): Promise<FeedbackSubmitResponse> {
-    const signal = options.signal
+  /**
+   * Serialize metadata and reject it before upload when it would exceed the server's
+   * size or depth limits. statusCode 0 marks the error as a client-side check.
+   */
+  private encodeMetadata(metadata: Record<string, unknown>, limits: FeedbackLimits): string {
+    const encoded = JSON.stringify(metadata)
 
-    // 1. Check availability
-    const available = await this.isAvailable(signal)
-    if (!available) {
-      throw new AvailabilityError('Feedback reporter is currently unavailable.')
+    if (byteLength(encoded) > limits.maxMetadataBytes) {
+      const message = `The metadata payload exceeds the maximum size of ${limits.maxMetadataBytes} bytes.`
+      throw new ValidationError(message, { metadata: [message] }, 0)
     }
 
-    return this.submit(options)
+    if (jsonDepth(metadata) > limits.maxMetadataDepth) {
+      const message = `The metadata must be no deeper than ${limits.maxMetadataDepth} levels.`
+      throw new ValidationError(message, { metadata: [message] }, 0)
+    }
+
+    return encoded
   }
 }
 

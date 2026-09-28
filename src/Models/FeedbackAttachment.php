@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Throwable;
 use TrustMedical\FeedbackReporter\Enums\AttachmentSource;
 
 /**
@@ -66,5 +68,19 @@ class FeedbackAttachment extends Model
     public function report(): BelongsTo
     {
         return $this->belongsTo(FeedbackReport::class, 'feedback_report_id', 'id');
+    }
+
+    /**
+     * Bootstrap the model and its traits.
+     */
+    protected static function booted(): void
+    {
+        static::deleted(function (FeedbackAttachment $attachment): void {
+            try {
+                Storage::disk($attachment->disk)->delete($attachment->path);
+            } catch (Throwable) {
+                // The record is gone; a missing disk or file must not block deletion
+            }
+        });
     }
 }

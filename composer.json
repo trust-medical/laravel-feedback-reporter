@@ -1,6 +1,6 @@
 {
     "name": "trust-medical/laravel-feedback-reporter",
-    "description": "Headless feedback and diagnostic context reporter package for Laravel 12 & 13",
+    "description": "Feedback reporter for Laravel 12 & 13 with a secure ingestion endpoint, a TypeScript SDK, and an isolated Web Component",
     "keywords": [
         "laravel",
         "feedback",
@@ -25,14 +25,8 @@
     },
     "require": {
         "php": "^8.3",
-        "illuminate/contracts": "^12.0 || ^13.0",
-        "illuminate/database": "^12.0 || ^13.0",
-        "illuminate/events": "^12.0 || ^13.0",
-        "illuminate/filesystem": "^12.0 || ^13.0",
-        "illuminate/http": "^12.0 || ^13.0",
-        "illuminate/routing": "^12.0 || ^13.0",
-        "illuminate/support": "^12.0 || ^13.0",
-        "illuminate/validation": "^12.0 || ^13.0"
+        "ext-fileinfo": "*",
+        "laravel/framework": "^12.0 || ^13.0"
     },
     "require-dev": {
         "larastan/larastan": "^3.0",
@@ -50,9 +44,7 @@
     "autoload-dev": {
         "psr-4": {
             "TrustMedical\\FeedbackReporter\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/",
-            "Workbench\\Database\\Factories\\": "workbench/database/factories/",
-            "Workbench\\Database\\Seeders\\": "workbench/database/seeders/"
+            "Workbench\\App\\": "workbench/app/"
         }
     },
     "scripts": {

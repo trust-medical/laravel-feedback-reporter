@@ -1,11 +1,11 @@
-# Laravel Feedback Reporter v4.3 integration prompt
+# Laravel Feedback Reporter v4.4 integration prompt
 
 Copy the prompt below into an AI coding assistant or use it as an implementation checklist.
 
 ```markdown
-# Integrate Laravel Feedback Reporter v4.3
+# Integrate Laravel Feedback Reporter v4.4
 
-Integrate `trust-medical/laravel-feedback-reporter:^4.3` and `@trust-medical/feedback-reporter` (installed from the `v4.3.0` Git tag) into this Laravel application. Both packages are distributed from GitHub, not Packagist or the npm registry. Version 4 is message-first: users take screenshots on their computer or phone and upload them. Images are optional. Do not implement DOM screenshot capture or restore pre-v4 capture behavior.
+Integrate `trust-medical/laravel-feedback-reporter:^4.4` and `@trust-medical/feedback-reporter` (installed from the `v4.4.0` Git tag) into this Laravel application. Both packages are distributed from GitHub, not Packagist or the npm registry. Version 4 is message-first: users take screenshots on their computer or phone and upload them. Images are optional. Do not implement DOM screenshot capture or restore pre-v4 capture behavior.
 
 ## Inspect the application first
 
@@ -26,15 +26,16 @@ If a prerequisite is missing, report it before installing dependencies. Prefer t
 1. Add the GitHub VCS repository to the application's `composer.json` (`"repositories": [{"type": "vcs", "url": "https://github.com/trust-medical/laravel-feedback-reporter"}]`), then install the package, publish its config, and migrate:
 
    ```bash
-   composer require trust-medical/laravel-feedback-reporter:^4.3
+   composer require trust-medical/laravel-feedback-reporter:^4.4
    php artisan vendor:publish --tag=feedback-reporter-config
    php artisan migrate
    ```
 
    Package migrations load automatically. Publish `feedback-reporter-migrations` before migrating only when the application intentionally owns migration copies.
 2. Enable the package through config and environment variables. Read environment values only from config files.
-3. Review environments, authentication, user/IP allowlists and denylists, the custom availability policy, unavailable response, route middleware, rate limit, validation limits, and storage. Keep attachments on a private disk.
+3. Review environments, authentication, IP allowlists and denylists, the custom availability policy, unavailable response, route middleware, rate limit, validation limits, and storage. Keep attachments on a private disk.
 4. Keep the package's availability and submission routes unless application-specific route options are necessary. Custom routes must preserve availability middleware, CSRF protection, authentication/authorization, and rate limiting.
+5. Confirm that PHP `upload_max_filesize`/`post_max_size` and any proxy body limit (for example nginx `client_max_body_size`) allow the configured attachment limits. Agree on a retention period; when one is required, set `retention.days` and schedule `model:prune` with `--model` set to `TrustMedical\FeedbackReporter\Models\FeedbackReport`.
 
 The built-in availability conditions are combined with AND. If the business rule is an OR expression such as “authenticated user OR approved guest IP/CIDR,” implement `TrustMedical\FeedbackReporter\Contracts\FeedbackAvailability` rather than weakening the submission route. Verify Laravel trusted proxies before relying on client IP or CIDR checks; do not trust forwarded headers without correct proxy configuration.
 
@@ -51,7 +52,7 @@ The third layer is the security boundary. Client-side hiding never replaces serv
 Install the frontend package from its Git tag. The import name stays `@trust-medical/feedback-reporter`:
 
 ```bash
-npm install github:trust-medical/laravel-feedback-reporter#v4.3.0
+npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
 ```
 
 Create one small Vite entry that only registers the custom element:
@@ -90,7 +91,7 @@ Adapt asset loading to the target application's conventions and load the entry o
 
 For Filament, render this same Blade component from a panel render hook such as `PanelsRenderHook::BODY_END`. Do not build a separate Filament reporter. Use the equivalent layout hook for another administration framework.
 
-Set the element's `config` property before it connects when programmatic options are necessary. Do not add host Tailwind utilities, global Widget CSS, or a direct Konva dependency. The Widget bundles its editor and CSS in an open Shadow DOM. Application code must not query or mutate its internal DOM.
+Set the element's `config` property before it connects when programmatic options are necessary; assigning it later rebuilds the Widget and discards an unsent draft. Do not add host Tailwind utilities, global Widget CSS, or a direct Konva dependency. The Widget bundles its editor and CSS in an open Shadow DOM. Application code must not query or mutate its internal DOM.
 
 Shadow DOM prevents accidental CSS and selector conflicts; it is not a security boundary against malicious same-page JavaScript. The Widget owns its listeners, Konva instances, and object URLs and cleans them up when disconnected.
 
@@ -108,7 +109,7 @@ Treat diagnostic context as untrusted support data. Escape it in HTML. Do not ex
 
 ## Add reviewer access safely
 
-The administration UI is application-owned. If required, build a read-only list/detail workflow using the existing framework and conventions. Do not add create, edit, or delete actions unless requested. A useful implementation normally includes report time, ULID, source, user, message, page title/URL, attachment count, source/date filters, selected diagnostics, and an attachment gallery. Avoid N+1 queries with eager loading or aggregate counts.
+The administration UI is application-owned. If required, build a read-only list/detail workflow using the existing framework and conventions. Do not add create, edit, or delete actions unless requested. If deletion is requested, delete through the Eloquent models so attachment files are removed too. A useful implementation normally includes report time, ULID, source, user, message, page title/URL, attachment count, source/date filters, selected diagnostics, and an attachment gallery. Avoid N+1 queries with eager loading or aggregate counts.
 
 Keep images outside the public web root. Protect preview/download routes with authentication and an application Gate or policy. Apply the same authorization to the administration resource. Authentication alone is insufficient: an authenticated non-reviewer must still be denied.
 
@@ -131,7 +132,7 @@ Feature coverage must include:
 - each applicable availability branch: guests, authenticated users, denied users, exact IPs/CIDRs, and disabled environments;
 - conditional Widget presence for UX and direct POST denial as the security boundary;
 - successful message-only and multipart image submissions;
-- required message, invalid MIME, per-file/count/total limits, rate limiting, and duplicate client report IDs;
+- required message, invalid MIME, per-file/count/total limits, rate limiting, and repeated client report IDs (the same submitter receives the existing report with 200 and `duplicate: true`; another submitter is rejected with 422);
 - response, database state, attachment storage, event dispatch, and cleanup after a failed multi-file submission;
 - reviewer and non-reviewer access to the report resource;
 - authorized preview/download, denied access, and a missing storage object;

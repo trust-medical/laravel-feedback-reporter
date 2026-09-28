@@ -3,8 +3,19 @@ import { consoleCollector } from './diagnostics/console'
 import { errorCollector } from './diagnostics/errors'
 import { networkErrorCollector } from './diagnostics/network'
 import { getNormalizedPerformance } from './diagnostics/performance'
-import { sanitizeUrl } from './sanitizer'
+import { sanitizeUrl, truncateString } from './sanitizer'
 import type { DiagnosticContext, FeedbackReporterConfig } from './types'
+
+const MAX_STORAGE_VALUE_LENGTH = 1024
+
+function readStorage(storage: Storage, key: string): string | null {
+  try {
+    const value = storage.getItem(key)
+    return value === null ? null : truncateString(value, MAX_STORAGE_VALUE_LENGTH)
+  } catch {
+    return null
+  }
+}
 
 export async function collectDiagnosticContext(
   config?: FeedbackReporterConfig,
@@ -115,7 +126,7 @@ export async function collectDiagnosticContext(
     if (config.storage.localStorageKeys?.length && typeof localStorage !== 'undefined') {
       const ls: Record<string, string | null> = {}
       for (const key of config.storage.localStorageKeys) {
-        ls[key] = localStorage.getItem(key)
+        ls[key] = readStorage(localStorage, key)
       }
       storageData.local_storage = ls
     }
@@ -123,7 +134,7 @@ export async function collectDiagnosticContext(
     if (config.storage.sessionStorageKeys?.length && typeof sessionStorage !== 'undefined') {
       const ss: Record<string, string | null> = {}
       for (const key of config.storage.sessionStorageKeys) {
-        ss[key] = sessionStorage.getItem(key)
+        ss[key] = readStorage(sessionStorage, key)
       }
       storageData.session_storage = ss
     }
@@ -134,31 +145,43 @@ export async function collectDiagnosticContext(
   }
 
   // 8. Diagnostics
-  if (config?.diagnostics?.performance !== false) {
+  // Performance is a one-time snapshot taken at submission, so it is included unless disabled.
+  const diagnostics = config?.diagnostics
+  if (diagnostics?.performance !== false) {
     const perf = getNormalizedPerformance()
     if (perf) {
       context.performance = perf
     }
   }
 
-  const errors = errorCollector.get()
-  if (errors.length > 0) {
-    context.errors = errors
+  // Continuous collectors are shared page-wide singletons. Only read the ones this
+  // configuration enabled, so another reporter's collected data is never included.
+  if (diagnostics?.errors) {
+    const errors = errorCollector.get()
+    if (errors.length > 0) {
+      context.errors = errors
+    }
   }
 
-  const consoleEntries = consoleCollector.get()
-  if (consoleEntries.length > 0) {
-    context.console = consoleEntries
+  if (diagnostics?.console) {
+    const consoleEntries = consoleCollector.get()
+    if (consoleEntries.length > 0) {
+      context.console = consoleEntries
+    }
   }
 
-  const networkErrors = networkErrorCollector.get()
-  if (networkErrors.length > 0) {
-    context.network_errors = networkErrors
+  if (diagnostics?.network) {
+    const networkErrors = networkErrorCollector.get()
+    if (networkErrors.length > 0) {
+      context.network_errors = networkErrors
+    }
   }
 
-  const breadcrumbs = breadcrumbsCollector.get()
-  if (breadcrumbs.length > 0) {
-    context.breadcrumbs = breadcrumbs
+  if (diagnostics?.breadcrumbs) {
+    const breadcrumbs = breadcrumbsCollector.get()
+    if (breadcrumbs.length > 0) {
+      context.breadcrumbs = breadcrumbs
+    }
   }
 
   // 9. Static / Dynamic Application Metadata

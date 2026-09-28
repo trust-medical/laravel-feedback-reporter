@@ -14,6 +14,8 @@ services:
       - COMPOSER_ALLOW_SUPERUSER=0
       - XDEBUG_MODE=off
     working_dir: /app
+    ports:
+      - "${WORKBENCH_PORT:-8000}:8000"
 
 volumes:
   composer-cache:

@@ -1,6 +1,14 @@
 import Konva from 'konva'
+import { AvailabilityError } from './errors'
+import { createId } from './id'
+import { DEFAULT_LIMITS, resolveLimits } from './limits'
 import { createFeedbackReporter } from './reporter'
-import type { FeedbackAttachmentInput, FeedbackImageSource, FeedbackReporterConfig } from './types'
+import type {
+  FeedbackAttachmentInput,
+  FeedbackImageSource,
+  FeedbackLimits,
+  FeedbackReporterConfig,
+} from './types'
 import { widgetStyles } from './widget-styles'
 
 export type FeedbackReporterColorScheme = 'auto' | 'light' | 'dark'
@@ -54,6 +62,7 @@ interface WidgetLabels {
   submit: string
   submitting: string
   unavailable: string
+  blankMessage: string
   fileLimit: string
   invalidType: string
   fileTooLarge: string
@@ -64,6 +73,12 @@ interface WidgetLabels {
   submitFailed: string
   validationFailed: string
   rateLimited: string
+  attachmentRejected: string
+  sessionExpired: string
+  payloadTooLarge: string
+  timeout: string
+  networkError: string
+  serverError: string
   success: string
 }
 
@@ -91,16 +106,39 @@ interface EditableImage {
   history: AnnotationSnapshot[][]
 }
 
-const MAX_FILES = 5
-const MAX_FILE_SIZE = 5 * 1024 * 1024
-const MAX_TOTAL_SIZE = 20 * 1024 * 1024
-const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 const ANNOTATION_COLOR = '#e11d48'
 const ANNOTATION_STROKE = 4
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 2
 const ZOOM_STEP = 0.25
 const SUCCESS_CLOSE_DELAY = 1500
+
+function formatMegabytes(kilobytes: number): string {
+  const megabytes = kilobytes / 1024
+  return Number.isInteger(megabytes) ? String(megabytes) : megabytes.toFixed(1)
+}
+
+function mimeLabel(mime: string): string {
+  const subtype = mime.split('/')[1] ?? mime
+  return subtype === 'jpeg' ? 'JPEG' : subtype === 'webp' ? 'WebP' : subtype.toUpperCase()
+}
+
+/** Fill `{placeholders}` in a label with the current limits and extra values. */
+function formatLabel(
+  template: string,
+  limits: FeedbackLimits,
+  extra: Record<string, string> = {},
+): string {
+  const values: Record<string, string> = {
+    maxFiles: String(limits.maxFiles),
+    maxFileSize: formatMegabytes(limits.maxFileSizeKb),
+    maxTotalSize: formatMegabytes(limits.maxTotalSizeKb),
+    types: limits.allowedMimes.map(mimeLabel).join(' / '),
+    ...extra,
+  }
+
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => values[key] ?? match)
+}
 
 class WidgetController {
   private readonly reporter
@@ -142,6 +180,14 @@ class WidgetController {
   } | null = null
   private isSubmitting = false
   private successCloseTimer: number | null = null
+  private limits: FeedbackLimits = resolveLimits()
+  private clientReportId = createId()
+  private submitController: AbortController | null = null
+  /** Incremented on reset so in-flight async work can detect that it is stale. */
+  private generation = 0
+  private pendingFiles = 0
+  private pendingBytes = 0
+  private readonly fileHint: HTMLElement
 
   public constructor(
     private readonly root: ShadowRoot,
@@ -170,6 +216,7 @@ class WidgetController {
     this.zoomInButton = this.requireElement<HTMLButtonElement>('[data-feedback-zoom-in]')
     this.zoomLevel = this.requireElement<HTMLOutputElement>('[data-feedback-zoom-level]')
     this.toolButtons = Array.from(this.root.querySelectorAll<HTMLButtonElement>('[data-tool]'))
+    this.fileHint = this.requireElement('[data-feedback-file-hint]')
 
     this.reporter = createFeedbackReporter({
       ...this.config.reporter,
@@ -178,6 +225,7 @@ class WidgetController {
     })
 
     this.bindEvents()
+    this.applyLimits()
     this.updateControls()
   }
 
@@ -194,12 +242,8 @@ class WidgetController {
   private bindEvents(): void {
     this.launcher.addEventListener('click', () => void this.open())
     this.form.addEventListener('submit', (event) => void this.submit(event))
-    this.root
-      .querySelector('[data-feedback-close]')
-      ?.addEventListener('click', () => this.dialog.close())
-    this.root
-      .querySelector('[data-feedback-cancel]')
-      ?.addEventListener('click', () => this.dialog.close())
+    this.root.querySelector('[data-feedback-close]')?.addEventListener('click', () => this.close())
+    this.root.querySelector('[data-feedback-cancel]')?.addEventListener('click', () => this.close())
     this.fileInput.addEventListener('change', () => void this.addFiles(this.fileInput.files))
     this.undoButton.addEventListener('click', () => this.undo())
     this.deleteButton.addEventListener('click', () => this.deleteSelectedShape())
@@ -226,7 +270,7 @@ class WidgetController {
     }
 
     this.dropzone.addEventListener('drop', (event) => {
-      if (event instanceof DragEvent) {
+      if (event instanceof DragEvent && !this.fileInput.disabled) {
         void this.addFiles(event.dataTransfer?.files ?? null)
       }
     })
@@ -237,13 +281,20 @@ class WidgetController {
     this.launcher.disabled = true
 
     try {
-      if (!(await this.reporter.isAvailable())) {
+      const availability = await this.reporter.getAvailability()
+      if (!availability.available) {
+        // Show the message inside the opened dialog so users and screen readers see it.
+        this.setFormDisabled(true)
         this.setError(this.config.labels.unavailable)
+        await this.showDialog()
         return
       }
 
+      this.setFormDisabled(false)
+      this.applyLimits(availability.limits)
       await this.showDialog()
     } catch (error) {
+      this.setFormDisabled(false)
       this.setError(this.errorText(error))
       await this.showDialog()
     } finally {
@@ -252,7 +303,34 @@ class WidgetController {
   }
 
   public close(): void {
-    this.dialog.close()
+    this.abortSubmit()
+    if (this.dialog.open) {
+      this.dialog.close()
+    }
+  }
+
+  private abortSubmit(): void {
+    this.submitController?.abort()
+    this.submitController = null
+  }
+
+  private applyLimits(limits?: FeedbackLimits): void {
+    this.limits = limits ?? this.reporter.getLimits()
+    this.fileInput.accept = this.limits.allowedMimes.join(',')
+    this.message.maxLength = this.limits.maxMessageLength
+    this.fileHint.textContent = formatLabel(this.config.labels.fileHint, this.limits)
+    this.count.textContent = `${this.images.length} / ${this.limits.maxFiles}`
+  }
+
+  private setFormDisabled(disabled: boolean): void {
+    this.message.disabled = disabled
+    this.fileInput.disabled = disabled
+    this.submitButton.disabled = disabled
+    if (disabled) {
+      this.dropzone.dataset.disabled = 'true'
+    } else {
+      delete this.dropzone.dataset.disabled
+    }
   }
 
   private async showDialog(): Promise<void> {
@@ -271,7 +349,9 @@ class WidgetController {
       this.renderSelectedImage()
     }
 
-    this.message.focus()
+    if (!this.message.disabled) {
+      this.message.focus()
+    }
   }
 
   private async addFiles(files: FileList | null): Promise<void> {
@@ -280,46 +360,71 @@ class WidgetController {
     }
 
     this.clearMessages()
+    const labels = this.config.labels
+    const maxFileSize = this.limits.maxFileSizeKb * 1024
+    const maxTotalSize = this.limits.maxTotalSizeKb * 1024
+    const selected = Array.from(files)
+    this.fileInput.value = ''
 
-    for (const file of Array.from(files)) {
-      if (this.images.length >= MAX_FILES) {
-        this.setError(this.config.labels.fileLimit)
+    for (const file of selected) {
+      // Count images that are still loading so rapid consecutive drops cannot exceed the limits.
+      if (this.images.length + this.pendingFiles >= this.limits.maxFiles) {
+        this.setError(formatLabel(labels.fileLimit, this.limits))
         break
       }
 
-      if (!ACCEPTED_TYPES.includes(file.type)) {
-        this.setError(this.config.labels.invalidType.replace('{filename}', file.name))
+      if (!this.limits.allowedMimes.includes(file.type)) {
+        this.setError(formatLabel(labels.invalidType, this.limits, { filename: file.name }))
         continue
       }
 
-      if (file.size > MAX_FILE_SIZE) {
-        this.setError(this.config.labels.fileTooLarge.replace('{filename}', file.name))
+      if (file.size > maxFileSize) {
+        this.setError(formatLabel(labels.fileTooLarge, this.limits, { filename: file.name }))
         continue
       }
 
-      if (this.totalOriginalSize() + file.size > MAX_TOTAL_SIZE) {
-        this.setError(this.config.labels.totalTooLarge)
+      if (this.totalOriginalSize() + this.pendingBytes + file.size > maxTotalSize) {
+        this.setError(formatLabel(labels.totalTooLarge, this.limits))
         break
       }
+
+      this.pendingFiles += 1
+      this.pendingBytes += file.size
+      const generation = this.generation
 
       try {
-        await this.addImage(file, file.name, 'attachment')
+        await this.addImage(file, file.name, 'attachment', generation)
       } catch {
-        this.setError(this.config.labels.invalidType.replace('{filename}', file.name))
+        if (generation === this.generation) {
+          this.setError(formatLabel(labels.invalidType, this.limits, { filename: file.name }))
+        }
+      } finally {
+        if (generation === this.generation) {
+          this.pendingFiles -= 1
+          this.pendingBytes -= file.size
+        }
       }
     }
-
-    this.fileInput.value = ''
   }
 
-  private async addImage(blob: Blob, filename: string, source: FeedbackImageSource): Promise<void> {
+  private async addImage(
+    blob: Blob,
+    filename: string,
+    source: FeedbackImageSource,
+    generation: number = this.generation,
+  ): Promise<void> {
     const objectUrl = URL.createObjectURL(blob)
 
     try {
       const image = await this.loadImage(objectUrl)
+      if (generation !== this.generation) {
+        // The dialog was closed or reset while the image was loading.
+        URL.revokeObjectURL(objectUrl)
+        return
+      }
       const dimensions = this.getStageDimensions(image)
       const editableImage: EditableImage = {
-        id: crypto.randomUUID(),
+        id: createId(),
         blob,
         filename,
         source,
@@ -395,7 +500,11 @@ class WidgetController {
         continue
       }
 
-      thumbnail.dataset.selected = String(item.id === this.selectedImageId)
+      const isSelected = item.id === this.selectedImageId
+      thumbnail.dataset.selected = String(isSelected)
+      if (isSelected) {
+        selectButton.setAttribute('aria-current', 'true')
+      }
       image.src = item.objectUrl
       image.alt = item.filename
       label.textContent = item.filename
@@ -412,7 +521,7 @@ class WidgetController {
       this.thumbnails.append(fragment)
     }
 
-    this.count.textContent = `${this.images.length} / ${MAX_FILES}`
+    this.count.textContent = `${this.images.length} / ${this.limits.maxFiles}`
     this.updateControls()
   }
 
@@ -843,39 +952,57 @@ class WidgetController {
       return
     }
 
+    const labels = this.config.labels
+    const message = this.message.value.trim()
+    if (message === '') {
+      this.setError(labels.blankMessage)
+      this.message.focus()
+      return
+    }
+
     this.clearMessages()
     this.isSubmitting = true
     this.submitButton.disabled = true
-    this.submitButton.textContent = this.config.labels.submitting
+    this.submitButton.textContent = labels.submitting
+    const controller = new AbortController()
+    this.submitController = controller
+    const generation = this.generation
 
     try {
-      if (!(await this.reporter.isAvailable())) {
-        throw new Error(this.config.labels.unavailable)
+      const availability = await this.reporter.getAvailability(controller.signal)
+      if (!availability.available) {
+        throw new AvailabilityError(labels.unavailable, 200)
       }
+      this.applyLimits(availability.limits)
 
+      const maxFileSize = this.limits.maxFileSizeKb * 1024
+      const maxTotalSize = this.limits.maxTotalSizeKb * 1024
       const attachments: FeedbackAttachmentInput[] = []
       let totalSize = 0
 
       for (const item of this.images) {
         const blob = await this.exportImage(item)
 
-        if (blob.size > MAX_FILE_SIZE) {
+        if (blob.size > maxFileSize) {
           throw new Error(
-            this.config.labels.editedFileTooLarge.replace('{filename}', item.filename),
+            formatLabel(labels.editedFileTooLarge, this.limits, { filename: item.filename }),
           )
         }
 
         totalSize += blob.size
-        if (totalSize > MAX_TOTAL_SIZE) {
-          throw new Error(this.config.labels.editedTotalTooLarge)
+        if (totalSize > maxTotalSize) {
+          throw new Error(formatLabel(labels.editedTotalTooLarge, this.limits))
         }
 
         attachments.push({ file: blob, source: item.source, filename: item.filename })
       }
 
       await this.reporter.submit({
-        message: this.message.value.trim(),
+        message,
         attachments,
+        signal: controller.signal,
+        // Reused across retries of this draft so the server can deduplicate it.
+        clientReportId: this.clientReportId,
         metadata: {
           source_type: this.config.sourceType,
           route_name: this.config.routeName,
@@ -888,8 +1015,12 @@ class WidgetController {
         },
       })
 
+      if (generation !== this.generation) {
+        return
+      }
+
       this.resetContent()
-      this.successMessage.textContent = this.config.labels.success
+      this.successMessage.textContent = labels.success
       this.successMessage.hidden = false
       this.successCloseTimer = window.setTimeout(() => {
         this.successCloseTimer = null
@@ -898,11 +1029,18 @@ class WidgetController {
         }
       }, SUCCESS_CLOSE_DELAY)
     } catch (error) {
-      this.setError(this.errorText(error))
+      if (generation === this.generation && !controller.signal.aborted) {
+        this.setError(this.errorText(error))
+      }
     } finally {
-      this.isSubmitting = false
-      this.submitButton.disabled = false
-      this.submitButton.textContent = this.config.labels.submit
+      if (this.submitController === controller) {
+        this.submitController = null
+      }
+      if (generation === this.generation) {
+        this.isSubmitting = false
+        this.submitButton.disabled = false
+        this.submitButton.textContent = labels.submit
+      }
     }
   }
 
@@ -939,17 +1077,29 @@ class WidgetController {
       return this.config.labels.submitFailed
     }
 
-    if (error.name === 'ValidationError') {
-      return this.config.labels.validationFailed
-    }
-    if (error.name === 'RateLimitError') {
-      return this.config.labels.rateLimited
-    }
-    if (error.name === 'AvailabilityError') {
-      return this.config.labels.unavailable
+    const labels = this.config.labels
+    const byName: Record<string, string> = {
+      ValidationError: labels.validationFailed,
+      RateLimitError: labels.rateLimited,
+      AvailabilityError: labels.unavailable,
+      AttachmentValidationError: labels.attachmentRejected,
+      SessionExpiredError: labels.sessionExpired,
+      PayloadTooLargeError: labels.payloadTooLarge,
+      TimeoutError: labels.timeout,
+      ServerError: labels.serverError,
     }
 
-    return error.message || this.config.labels.submitFailed
+    const mapped = byName[error.name]
+    if (mapped) {
+      return mapped
+    }
+    if (error.name === 'TransportError') {
+      const statusCode = (error as { statusCode?: number }).statusCode
+      return statusCode === undefined ? labels.networkError : labels.submitFailed
+    }
+
+    // Errors raised by the widget itself already carry a localized message.
+    return error.message || labels.submitFailed
   }
 
   private setError(message: string): void {
@@ -1005,6 +1155,9 @@ class WidgetController {
     }
     this.images = []
     this.selectedImageId = null
+    this.pendingFiles = 0
+    this.pendingBytes = 0
+    this.clientReportId = createId()
     this.message.value = ''
     this.fileInput.value = ''
     this.renderThumbnails()
@@ -1013,9 +1166,14 @@ class WidgetController {
   }
 
   private reset(): void {
+    // Invalidate in-flight submissions and image loads started for the previous draft.
+    this.abortSubmit()
+    this.generation += 1
     if (this.isSubmitting) {
-      return
+      this.isSubmitting = false
+      this.submitButton.textContent = this.config.labels.submit
     }
+    this.setFormDisabled(false)
     if (this.successCloseTimer !== null) {
       window.clearTimeout(this.successCloseTimer)
       this.successCloseTimer = null
@@ -1026,6 +1184,8 @@ class WidgetController {
   }
 
   public destroy(): void {
+    this.abortSubmit()
+    this.generation += 1
     this.reporter.destroyDiagnostics()
     if (this.successCloseTimer !== null) {
       window.clearTimeout(this.successCloseTimer)
@@ -1041,7 +1201,7 @@ class WidgetController {
 const labels = {
   ja: {
     launcher: 'フィードバックを報告',
-    eyebrow: 'Feedback report',
+    eyebrow: 'フィードバック',
     title: 'フィードバックを報告',
     description: 'スクリーンショットや画像と診断情報を安全に送信します。',
     close: '閉じる',
@@ -1050,7 +1210,7 @@ const labels = {
     images: 'スクリーンショット・画像（任意）',
     chooseImages: '画像を選択',
     dropHint: 'またはドラッグ＆ドロップ',
-    fileHint: 'PNG / JPEG / WebP・1枚5MBまで',
+    fileHint: '{types}・1枚{maxFileSize}MBまで',
     attachments: '添付画像',
     removeAttachment: '添付画像「{filename}」を削除',
     move: '移動',
@@ -1069,16 +1229,24 @@ const labels = {
     submit: 'レポートを送信',
     submitting: '送信中…',
     unavailable: '現在、この画面からレポートを送信できません。',
-    fileLimit: '添付できる画像は合計5枚までです。',
-    invalidType: '{filename} は有効なPNG、JPEG、WebP画像ではありません。',
-    fileTooLarge: '{filename} は5MBを超えています。',
-    totalTooLarge: '添付画像の合計サイズは20MBまでです。',
-    editedFileTooLarge: '{filename} の編集後サイズが5MBを超えています。',
-    editedTotalTooLarge: '編集後の添付画像の合計サイズが20MBを超えています。',
+    blankMessage: 'レポートメッセージを入力してください。',
+    fileLimit: '添付できる画像は合計{maxFiles}枚までです。',
+    invalidType: '{filename} は対応している画像形式（{types}）ではありません。',
+    fileTooLarge: '{filename} は{maxFileSize}MBを超えています。',
+    totalTooLarge: '添付画像の合計サイズは{maxTotalSize}MBまでです。',
+    editedFileTooLarge: '{filename} の編集後サイズが{maxFileSize}MBを超えています。',
+    editedTotalTooLarge: '編集後の添付画像の合計サイズが{maxTotalSize}MBを超えています。',
     exportFailed: '注釈画像を生成できませんでした。',
     submitFailed: 'レポートを送信できませんでした。時間をおいて再試行してください。',
     validationFailed: '入力内容または添付画像を確認してください。',
     rateLimited: '送信回数が上限に達しました。しばらく待ってから再試行してください。',
+    attachmentRejected: '添付画像の枚数、形式、またはサイズを確認してください。',
+    sessionExpired:
+      'セッションの有効期限が切れました。ページを再読み込みしてから再試行してください。',
+    payloadTooLarge: '送信データが大きすぎます。画像の枚数やサイズを減らしてください。',
+    timeout: '通信がタイムアウトしました。時間をおいて再試行してください。',
+    networkError: 'ネットワークに接続できませんでした。接続を確認して再試行してください。',
+    serverError: 'サーバーでエラーが発生しました。時間をおいて再試行してください。',
     success: '送信が完了しました。この画面を閉じます。',
   },
   en: {
@@ -1092,7 +1260,7 @@ const labels = {
     images: 'Screenshots or images (optional)',
     chooseImages: 'Choose images',
     dropHint: 'or drag and drop',
-    fileHint: 'PNG / JPEG / WebP · up to 5 MB each',
+    fileHint: '{types} · up to {maxFileSize} MB each',
     attachments: 'Attached images',
     removeAttachment: 'Remove attached image {filename}',
     move: 'Move',
@@ -1111,16 +1279,23 @@ const labels = {
     submit: 'Send report',
     submitting: 'Sending…',
     unavailable: 'Feedback reporting is currently unavailable.',
-    fileLimit: 'You can attach up to 5 images.',
-    invalidType: '{filename} is not a valid PNG, JPEG, or WebP image.',
-    fileTooLarge: '{filename} exceeds 5 MB.',
-    totalTooLarge: 'Attachments may total up to 20 MB.',
-    editedFileTooLarge: '{filename} exceeds 5 MB after editing.',
-    editedTotalTooLarge: 'Edited attachments exceed 20 MB in total.',
+    blankMessage: 'Enter a feedback message.',
+    fileLimit: 'You can attach up to {maxFiles} images.',
+    invalidType: '{filename} is not a supported image type ({types}).',
+    fileTooLarge: '{filename} exceeds {maxFileSize} MB.',
+    totalTooLarge: 'Attachments may total up to {maxTotalSize} MB.',
+    editedFileTooLarge: '{filename} exceeds {maxFileSize} MB after editing.',
+    editedTotalTooLarge: 'Edited attachments exceed {maxTotalSize} MB in total.',
     exportFailed: 'The annotated image could not be generated.',
     submitFailed: 'The report could not be sent. Please try again later.',
     validationFailed: 'Check the message and attached images.',
     rateLimited: 'Too many reports were sent. Please try again later.',
+    attachmentRejected: 'Check the number, type, and size of the attached images.',
+    sessionExpired: 'Your session has expired. Reload the page and try again.',
+    payloadTooLarge: 'The report is too large. Attach fewer or smaller images.',
+    timeout: 'The request timed out. Please try again later.',
+    networkError: 'The network could not be reached. Check your connection and try again.',
+    serverError: 'The server encountered an error. Please try again later.',
     success: 'Your feedback was sent. This dialog will close.',
   },
 } satisfies Record<'ja' | 'en', WidgetLabels>
@@ -1156,9 +1331,9 @@ function widgetTemplate(text: WidgetLabels): string {
                     <header><div><p class="eyebrow">${text.eyebrow}</p><h2 id="feedback-dialog-title">${text.title}</h2><p class="description">${text.description}</p></div><button type="button" data-feedback-close class="icon-button" aria-label="${text.close}">✕</button></header>
                     <div class="body">
                         <section class="sidebar">
-                            <label class="field"><span>${text.message} <b>*</b></span><textarea data-feedback-message required maxlength="10000" rows="6" placeholder="${text.messagePlaceholder}"></textarea></label>
-                            <div class="field"><span>${text.images}</span><label data-feedback-dropzone class="dropzone"><span class="plus" aria-hidden="true">＋</span><span><strong>${text.chooseImages}</strong> ${text.dropHint}</span><small>${text.fileHint}</small><input data-feedback-files type="file" accept="image/png,image/jpeg,image/webp" multiple></label></div>
-                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / 5</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><div data-feedback-thumbnail class="thumbnail"><button type="button" data-feedback-thumbnail-select class="thumbnail-select"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button><button type="button" data-feedback-remove-image class="thumbnail-remove"></button></div></template></div>
+                            <label class="field"><span>${text.message} <b>*</b></span><textarea data-feedback-message required maxlength="${DEFAULT_LIMITS.maxMessageLength}" rows="6" placeholder="${text.messagePlaceholder}"></textarea></label>
+                            <div class="field"><span>${text.images}</span><label data-feedback-dropzone class="dropzone"><span class="plus" aria-hidden="true">＋</span><span><strong>${text.chooseImages}</strong> ${text.dropHint}</span><small data-feedback-file-hint>${formatLabel(text.fileHint, resolveLimits())}</small><input data-feedback-files type="file" accept="${DEFAULT_LIMITS.allowedMimes.join(',')}" multiple></label></div>
+                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / ${DEFAULT_LIMITS.maxFiles}</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><div data-feedback-thumbnail class="thumbnail"><button type="button" data-feedback-thumbnail-select class="thumbnail-select"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button><button type="button" data-feedback-remove-image class="thumbnail-remove"></button></div></template></div>
                         </section>
                         <section class="editor">
                             <div data-feedback-viewport class="viewport"><div class="viewport-inner"><p data-feedback-empty>${text.empty}</p><div data-feedback-canvas class="canvas-host"></div></div></div>
@@ -1172,19 +1347,34 @@ function widgetTemplate(text: WidgetLabels): string {
                             </div>
                         </section>
                     </div>
-                    <footer><div aria-live="polite" class="messages"><p data-feedback-error hidden></p><p data-feedback-success role="status" hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
+                    <footer><div aria-live="polite" class="messages"><p data-feedback-error role="alert" hidden></p><p data-feedback-success role="status" hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
                 </form>
             </dialog>
         </div>
     `
 }
 
-export class FeedbackReporterElement extends HTMLElement {
+// Importing this module during SSR must not throw, so fall back to a placeholder base
+// class when HTMLElement does not exist. The element is only defined in the browser.
+const HTMLElementBase: typeof HTMLElement =
+  typeof HTMLElement === 'undefined' ? (class {} as unknown as typeof HTMLElement) : HTMLElement
+
+export class FeedbackReporterElement extends HTMLElementBase {
   private controller: WidgetController | null = null
   private widgetConfig: FeedbackReporterWidgetConfig = {}
 
+  /**
+   * Programmatic configuration. Attributes take precedence over these values.
+   * Assigning it after the element is connected rebuilds the widget, which discards
+   * any draft in progress.
+   */
   public set config(config: FeedbackReporterWidgetConfig) {
-    this.widgetConfig = config
+    this.widgetConfig = config ?? {}
+    if (this.controller) {
+      this.controller.destroy()
+      this.controller = null
+      this.connectedCallback()
+    }
   }
 
   public get config(): FeedbackReporterWidgetConfig {
@@ -1192,6 +1382,8 @@ export class FeedbackReporterElement extends HTMLElement {
   }
 
   public connectedCallback(): void {
+    this.upgradeConfigProperty()
+
     if (this.controller) {
       return
     }
@@ -1206,11 +1398,26 @@ export class FeedbackReporterElement extends HTMLElement {
       availabilityEndpoint:
         this.getAttribute('availability-endpoint') ?? this.widgetConfig.availabilityEndpoint,
       sourceType: this.getAttribute('source-type') ?? this.widgetConfig.sourceType ?? 'web_site',
-      routeName: this.getAttribute('route-name') ?? this.widgetConfig.routeName ?? null,
-      panelId: this.getAttribute('panel-id') ?? this.widgetConfig.panelId ?? null,
+      // Empty attributes (e.g. an unnamed Blade route) are treated as unset.
+      routeName: this.getAttribute('route-name') || this.widgetConfig.routeName || null,
+      panelId: this.getAttribute('panel-id') || this.widgetConfig.panelId || null,
       reporter: this.widgetConfig.reporter,
       labels: labels[locale],
     })
+  }
+
+  /**
+   * A `config` value assigned before the element was upgraded is stored as an own
+   * property that shadows the accessor. Move it through the setter instead.
+   */
+  private upgradeConfigProperty(): void {
+    if (!Object.hasOwn(this, 'config')) {
+      return
+    }
+
+    const value = (this as { config?: FeedbackReporterWidgetConfig }).config
+    delete (this as { config?: FeedbackReporterWidgetConfig }).config
+    this.widgetConfig = value ?? {}
   }
 
   public disconnectedCallback(): void {
@@ -1230,6 +1437,10 @@ export class FeedbackReporterElement extends HTMLElement {
 const registeredElementConstructors = new Map<string, CustomElementConstructor>()
 
 export function registerFeedbackReporterElement(tagName: string = 'trust-feedback-reporter'): void {
+  if (typeof customElements === 'undefined') {
+    return
+  }
+
   const current = customElements.get(tagName)
   const registered = registeredElementConstructors.get(tagName)
 

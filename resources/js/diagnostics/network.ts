@@ -1,4 +1,5 @@
 import { sanitizeUrl } from '../sanitizer'
+import { normalizeMaxEntries } from './buffer'
 
 export interface CapturedNetworkErrorItem {
   method: string
@@ -13,6 +14,13 @@ class NetworkErrorCollector {
   private maxEntries: number = 20
   private installed: boolean = false
   private subscribers: number = 0
+  /**
+   * Each installation gets a new version. A wrapper records only while its version is
+   * active, so a wrapper left in place (because another library wrapped fetch/XHR after
+   * it) passes requests through silently and a reinstall never records twice.
+   */
+  private activeVersion: number = 0
+  private versionCounter: number = 0
   private wrappedFetch: typeof window.fetch | null = null
   private wrappedXhrOpen: typeof XMLHttpRequest.prototype.open | null = null
   private wrappedXhrSend: typeof XMLHttpRequest.prototype.send | null = null
@@ -29,9 +37,13 @@ class NetworkErrorCollector {
       return
     }
 
-    this.maxEntries = maxEntries
+    this.maxEntries = normalizeMaxEntries(maxEntries, 20)
     this.installed = true
     this.subscribers = 1
+
+    const version = ++this.versionCounter
+    this.activeVersion = version
+    const isActive = () => this.activeVersion === version
 
     // 1. Intercept fetch
     if (typeof window.fetch === 'function') {
@@ -53,7 +65,7 @@ class NetworkErrorCollector {
 
         try {
           const response = await originalFetch.apply(this, [input, init])
-          if (!response.ok) {
+          if (!response.ok && isActive()) {
             self.add({
               method,
               url: sanitized,
@@ -64,13 +76,15 @@ class NetworkErrorCollector {
           }
           return response
         } catch (err) {
-          self.add({
-            method,
-            url: sanitized,
-            status: 'NETWORK_ERROR',
-            duration_ms: Math.round(performance.now() - start),
-            timestamp: new Date().toISOString(),
-          })
+          if (isActive()) {
+            self.add({
+              method,
+              url: sanitized,
+              status: 'NETWORK_ERROR',
+              duration_ms: Math.round(performance.now() - start),
+              timestamp: new Date().toISOString(),
+            })
+          }
           throw err
         }
       }
@@ -105,7 +119,7 @@ class NetworkErrorCollector {
         xhr._fbrStart = performance.now()
 
         this.addEventListener('loadend', () => {
-          if (this.status >= 400 || this.status === 0) {
+          if (isActive() && (this.status >= 400 || this.status === 0)) {
             self.add({
               method: xhr._fbrMethod || 'GET',
               url: xhr._fbrUrl || '',
@@ -150,6 +164,10 @@ class NetworkErrorCollector {
       return
     }
 
+    // Deactivate first: wrappers that cannot be removed keep delegating but stop recording.
+    this.activeVersion = 0
+
+    // Only restore when our wrapper is still on top; otherwise a later wrapper would be dropped.
     if (this.originalFetch && window.fetch === this.wrappedFetch) {
       window.fetch = this.originalFetch
     }

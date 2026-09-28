@@ -1,4 +1,5 @@
-import { truncateString } from '../sanitizer'
+import { sanitizeUrl, sanitizeUrlsInText, truncateString } from '../sanitizer'
+import { normalizeMaxEntries } from './buffer'
 
 export interface CapturedErrorItem {
   type: 'error' | 'unhandledrejection'
@@ -27,7 +28,7 @@ class ErrorCollector {
       return
     }
 
-    this.maxEntries = maxEntries
+    this.maxEntries = normalizeMaxEntries(maxEntries, 20)
     this.installed = true
     this.subscribers = 1
 
@@ -35,10 +36,12 @@ class ErrorCollector {
       this.add({
         type: 'error',
         message: truncateString(event.message, 500),
-        source: event.filename ? truncateString(event.filename, 255) : undefined,
+        source: event.filename ? truncateString(sanitizeUrl(event.filename), 255) : undefined,
         lineno: event.lineno,
         colno: event.colno,
-        stack: event.error?.stack ? truncateString(event.error.stack, 2000) : undefined,
+        stack: event.error?.stack
+          ? truncateString(sanitizeUrlsInText(String(event.error.stack)), 2000)
+          : undefined,
         timestamp: new Date().toISOString(),
       })
     }
@@ -48,7 +51,9 @@ class ErrorCollector {
       const reason = event.reason
       const message = reason instanceof Error ? reason.message : String(reason)
       const stack =
-        reason instanceof Error && reason.stack ? truncateString(reason.stack, 2000) : undefined
+        reason instanceof Error && reason.stack
+          ? truncateString(sanitizeUrlsInText(reason.stack), 2000)
+          : undefined
 
       this.add({
         type: 'unhandledrejection',

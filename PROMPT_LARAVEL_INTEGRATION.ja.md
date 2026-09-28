@@ -1,11 +1,11 @@
-# Laravel Feedback Reporter v4.3 導入プロンプト
+# Laravel Feedback Reporter v4.4 導入プロンプト
 
 以下をAIコーディングアシスタントへの依頼文、または実装チェックリストとして利用してください。
 
 ```markdown
-# Laravel Feedback Reporter v4.3を導入する
+# Laravel Feedback Reporter v4.4を導入する
 
-このLaravelアプリケーションへ `trust-medical/laravel-feedback-reporter:^4.3` と `@trust-medical/feedback-reporter`（Git tag `v4.3.0` からinstall）を導入してください。どちらもPackagistやnpm registryではなくGitHubから配布されます。v4はmessageを必須とし、利用者がパソコンや携帯で撮影したスクリーンショットをuploadする方式です。画像は任意です。DOMの自動画像化やv3以前のcapture動作は実装しないでください。
+このLaravelアプリケーションへ `trust-medical/laravel-feedback-reporter:^4.4` と `@trust-medical/feedback-reporter`（Git tag `v4.4.0` からinstall）を導入してください。どちらもPackagistやnpm registryではなくGitHubから配布されます。v4はmessageを必須とし、利用者がパソコンや携帯で撮影したスクリーンショットをuploadする方式です。画像は任意です。DOMの自動画像化やv3以前のcapture動作は実装しないでください。
 
 ## 最初にapplicationを確認する
 
@@ -26,15 +26,16 @@
 1. applicationの `composer.json` にGitHubのVCS repository（`"repositories": [{"type": "vcs", "url": "https://github.com/trust-medical/laravel-feedback-reporter"}]`）を追加してから、packageをinstallし、configをpublishしてmigrateします。
 
    ```bash
-   composer require trust-medical/laravel-feedback-reporter:^4.3
+   composer require trust-medical/laravel-feedback-reporter:^4.4
    php artisan vendor:publish --tag=feedback-reporter-config
    php artisan migrate
    ```
 
    package migrationは自動的に読み込まれます。application側でmigrationのcopyを管理する場合だけ、migrate前に `feedback-reporter-migrations` をpublishします。
 2. configと環境変数でpackageを有効化します。環境変数はconfig file以外から直接参照しません。
-3. environment、authentication、user/IPのallowlist・denylist、custom availability policy、利用不可時response、route middleware、rate limit、validation limit、storageを確認します。添付は非公開diskへ保存します。
+3. environment、authentication、IPのallowlist・denylist、custom availability policy、利用不可時response、route middleware、rate limit、validation limit、storageを確認します。添付は非公開diskへ保存します。
 4. application固有のroute optionが不要ならpackageのavailability・submission routeを使います。独自routeにはavailability middleware、CSRF、認証・認可、rate limitを維持します。
+5. PHPの `upload_max_filesize`・`post_max_size` と、proxy側のbody上限（nginxの `client_max_body_size` など）が、設定した添付の上限以上であることを確認します。保持期間を決め、必要なら `retention.days` を設定して、`--model` に `TrustMedical\FeedbackReporter\Models\FeedbackReport` を指定した `model:prune` をscheduleします。
 
 組み込みの利用可否条件はANDで結合されます。「認証済みuser、または許可済みguest IP/CIDR」のようなOR条件はsubmission routeを緩めず、`TrustMedical\FeedbackReporter\Contracts\FeedbackAvailability` を実装してください。client IPやCIDRで制限する前にLaravelのtrusted proxy設定を確認し、正しく構成されていないforwarded headerを信頼しません。
 
@@ -51,7 +52,7 @@ security boundaryは三層目です。client側の非表示はserver認可の代
 Git tagを指定してfrontend packageをinstallします。import名は `@trust-medical/feedback-reporter` のままです。
 
 ```bash
-npm install github:trust-medical/laravel-feedback-reporter#v4.3.0
+npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
 ```
 
 custom elementの登録だけを行う小さなVite entryを1つ作ります。
@@ -90,7 +91,7 @@ endpoint、locale、利用可否、asset loadを揃えるため、elementを1つ
 
 Filamentでは `PanelsRenderHook::BODY_END` などのpanel render hookから同じBlade componentを描画します。Filament専用の別reporterを作りません。他の管理画面frameworkでも同等のlayout hookを使います。
 
-programmaticなoptionが必要なら、elementがDOMへ接続される前に `config` propertyへ渡します。Widget用のTailwind utility、global CSS、直接のKonva依存は追加しません。WidgetはeditorとCSSをopen Shadow DOM内に同梱します。application codeから内部DOMを検索・変更しません。
+programmaticなoptionが必要なら、elementがDOMへ接続される前に `config` propertyへ渡します。接続後に渡すとWidgetが作り直され、未送信の下書きは破棄されます。Widget用のTailwind utility、global CSS、直接のKonva依存は追加しません。WidgetはeditorとCSSをopen Shadow DOM内に同梱します。application codeから内部DOMを検索・変更しません。
 
 Shadow DOMは意図しないstyle・selector競合を防ぎますが、同じページ上の悪意あるJavaScriptに対するsecurity boundaryではありません。Widget自身がlistener、Konva instance、Object URLを管理し、切断時に破棄します。
 
@@ -108,7 +109,7 @@ password、Cookie、Authorization header、CSRF token、request/response body、
 
 ## reviewerのアクセスを安全に実装する
 
-管理UIはapplication側の責務です。必要なら既存frameworkと規約に沿う読み取り専用の一覧・詳細を実装します。明示的な要件がなければcreate、edit、delete actionを追加しません。通常は受付日時、ULID、source、user、message、page title/URL、添付数、source・受付日のfilter、選択済み診断情報、添付galleryを含めます。eager loadingまたはaggregate countでN+1を避けます。
+管理UIはapplication側の責務です。必要なら既存frameworkと規約に沿う読み取り専用の一覧・詳細を実装します。明示的な要件がなければcreate、edit、delete actionを追加しません。削除が必要な場合は、添付fileも消えるようEloquent model経由で削除します。通常は受付日時、ULID、source、user、message、page title/URL、添付数、source・受付日のfilter、選択済み診断情報、添付galleryを含めます。eager loadingまたはaggregate countでN+1を避けます。
 
 画像はpublic web root外へ保存します。preview/download routeをauthenticationとapplicationのGateまたはpolicyで保護し、管理resourceにも同じ認可を適用します。authenticationだけでは不十分です。認証済みでもreviewerでなければ拒否してください。
 
@@ -131,7 +132,7 @@ Feature testには次を含めます。
 - 対象となるguest、認証user、拒否user、exact IP/CIDR、無効environmentの各利用可否分岐
 - UXとしてのWidget表示制御と、security boundaryとしての直接POST拒否
 - messageのみ、およびmultipart画像付きの正常送信
-- message必須、不正MIME、1枚/枚数/合計size、rate limit、重複client report ID
+- message必須、不正MIME、1枚/枚数/合計size、rate limit、client report IDの再送（同じ送信者には既存reportを200と `duplicate: true` で返し、別の送信者は422で拒否）
 - response、DB状態、添付storage、event発行、複数file保存失敗時のcleanup
 - reviewerと非reviewerによるreport resourceへのアクセス
 - 認可済みpreview/download、拒否、storage object欠損

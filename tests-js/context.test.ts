@@ -47,3 +47,15 @@ describe('context collection', () => {
     expect(ctx.storage).toBeUndefined()
   })
 })
+
+describe('context storage bounds', () => {
+  it('truncates long allowlisted storage values', async () => {
+    localStorage.setItem('big', 'z'.repeat(5000))
+
+    const ctx = await collectDiagnosticContext({ storage: { localStorageKeys: ['big'] } })
+    const value = (ctx.storage as { local_storage: Record<string, string> }).local_storage.big
+
+    expect(value?.length).toBeLessThanOrEqual(1024 + '...[TRUNCATED]'.length)
+    localStorage.clear()
+  })
+})

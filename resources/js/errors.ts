@@ -61,3 +61,30 @@ export class ServerError extends TransportError {
     this.name = 'ServerError'
   }
 }
+
+export class SessionExpiredError extends TransportError {
+  constructor(
+    message: string = 'The session or CSRF token has expired. Reload the page and try again.',
+    statusCode: number = 419,
+  ) {
+    super(message, statusCode)
+    this.name = 'SessionExpiredError'
+  }
+}
+
+export class PayloadTooLargeError extends TransportError {
+  constructor(
+    message: string = 'The request payload is too large for the server.',
+    statusCode: number = 413,
+  ) {
+    super(message, statusCode)
+    this.name = 'PayloadTooLargeError'
+  }
+}
+
+export class TimeoutError extends TransportError {
+  constructor(public readonly timeoutMs: number) {
+    super(`The request timed out after ${timeoutMs} ms.`)
+    this.name = 'TimeoutError'
+  }
+}

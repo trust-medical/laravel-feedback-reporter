@@ -1,4 +1,4 @@
-import { createFeedbackReporter } from './chunk-C65TNJGS.js';
+import { DEFAULT_LIMITS, resolveLimits, createFeedbackReporter, createId, AvailabilityError } from './chunk-OZ33U26D.js';
 import Konva from 'konva';
 
 // resources/js/widget-styles.ts
@@ -62,6 +62,7 @@ var widgetStyles = `
     textarea::placeholder { color: var(--fbr-muted); }
     .dropzone { display: grid; place-items: center; gap: .5rem; border: 2px dashed var(--fbr-border); border-radius: .75rem; padding: 1.5rem 1rem; color: var(--fbr-muted); text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
     .dropzone:hover, .dropzone[data-dragging="true"] { border-color: var(--fbr-accent); background: color-mix(in srgb, var(--fbr-accent) 8%, transparent); }
+    .dropzone[data-disabled="true"] { opacity: .5; cursor: not-allowed; pointer-events: none; }
     .dropzone input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .plus { font-size: 1.5rem; }
     .dropzone small { font-size: .75rem; font-weight: 400; }
@@ -117,16 +118,30 @@ var widgetStyles = `
 `;
 
 // resources/js/widget.ts
-var MAX_FILES = 5;
-var MAX_FILE_SIZE = 5 * 1024 * 1024;
-var MAX_TOTAL_SIZE = 20 * 1024 * 1024;
-var ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 var ANNOTATION_COLOR = "#e11d48";
 var ANNOTATION_STROKE = 4;
 var MIN_ZOOM = 0.5;
 var MAX_ZOOM = 2;
 var ZOOM_STEP = 0.25;
 var SUCCESS_CLOSE_DELAY = 1500;
+function formatMegabytes(kilobytes) {
+  const megabytes = kilobytes / 1024;
+  return Number.isInteger(megabytes) ? String(megabytes) : megabytes.toFixed(1);
+}
+function mimeLabel(mime) {
+  const subtype = mime.split("/")[1] ?? mime;
+  return subtype === "jpeg" ? "JPEG" : subtype === "webp" ? "WebP" : subtype.toUpperCase();
+}
+function formatLabel(template, limits, extra = {}) {
+  const values = {
+    maxFiles: String(limits.maxFiles),
+    maxFileSize: formatMegabytes(limits.maxFileSizeKb),
+    maxTotalSize: formatMegabytes(limits.maxTotalSizeKb),
+    types: limits.allowedMimes.map(mimeLabel).join(" / "),
+    ...extra
+  };
+  return template.replace(/\{(\w+)\}/g, (match, key) => values[key] ?? match);
+}
 var WidgetController = class {
   constructor(root, config) {
     this.root = root;
@@ -154,12 +169,14 @@ var WidgetController = class {
     this.zoomInButton = this.requireElement("[data-feedback-zoom-in]");
     this.zoomLevel = this.requireElement("[data-feedback-zoom-level]");
     this.toolButtons = Array.from(this.root.querySelectorAll("[data-tool]"));
+    this.fileHint = this.requireElement("[data-feedback-file-hint]");
     this.reporter = createFeedbackReporter({
       ...this.config.reporter,
       endpoint: this.config.endpoint,
       availabilityEndpoint: this.config.availabilityEndpoint
     });
     this.bindEvents();
+    this.applyLimits();
     this.updateControls();
   }
   root;
@@ -198,6 +215,14 @@ var WidgetController = class {
   panOrigin = null;
   isSubmitting = false;
   successCloseTimer = null;
+  limits = resolveLimits();
+  clientReportId = createId();
+  submitController = null;
+  /** Incremented on reset so in-flight async work can detect that it is stale. */
+  generation = 0;
+  pendingFiles = 0;
+  pendingBytes = 0;
+  fileHint;
   requireElement(selector) {
     const element = this.root.querySelector(selector);
     if (!element) {
@@ -208,8 +233,8 @@ var WidgetController = class {
   bindEvents() {
     this.launcher.addEventListener("click", () => void this.open());
     this.form.addEventListener("submit", (event) => void this.submit(event));
-    this.root.querySelector("[data-feedback-close]")?.addEventListener("click", () => this.dialog.close());
-    this.root.querySelector("[data-feedback-cancel]")?.addEventListener("click", () => this.dialog.close());
+    this.root.querySelector("[data-feedback-close]")?.addEventListener("click", () => this.close());
+    this.root.querySelector("[data-feedback-cancel]")?.addEventListener("click", () => this.close());
     this.fileInput.addEventListener("change", () => void this.addFiles(this.fileInput.files));
     this.undoButton.addEventListener("click", () => this.undo());
     this.deleteButton.addEventListener("click", () => this.deleteSelectedShape());
@@ -232,7 +257,7 @@ var WidgetController = class {
       });
     }
     this.dropzone.addEventListener("drop", (event) => {
-      if (event instanceof DragEvent) {
+      if (event instanceof DragEvent && !this.fileInput.disabled) {
         void this.addFiles(event.dataTransfer?.files ?? null);
       }
     });
@@ -241,12 +266,18 @@ var WidgetController = class {
     this.clearMessages();
     this.launcher.disabled = true;
     try {
-      if (!await this.reporter.isAvailable()) {
+      const availability = await this.reporter.getAvailability();
+      if (!availability.available) {
+        this.setFormDisabled(true);
         this.setError(this.config.labels.unavailable);
+        await this.showDialog();
         return;
       }
+      this.setFormDisabled(false);
+      this.applyLimits(availability.limits);
       await this.showDialog();
     } catch (error) {
+      this.setFormDisabled(false);
       this.setError(this.errorText(error));
       await this.showDialog();
     } finally {
@@ -254,7 +285,31 @@ var WidgetController = class {
     }
   }
   close() {
-    this.dialog.close();
+    this.abortSubmit();
+    if (this.dialog.open) {
+      this.dialog.close();
+    }
+  }
+  abortSubmit() {
+    this.submitController?.abort();
+    this.submitController = null;
+  }
+  applyLimits(limits) {
+    this.limits = limits ?? this.reporter.getLimits();
+    this.fileInput.accept = this.limits.allowedMimes.join(",");
+    this.message.maxLength = this.limits.maxMessageLength;
+    this.fileHint.textContent = formatLabel(this.config.labels.fileHint, this.limits);
+    this.count.textContent = `${this.images.length} / ${this.limits.maxFiles}`;
+  }
+  setFormDisabled(disabled) {
+    this.message.disabled = disabled;
+    this.fileInput.disabled = disabled;
+    this.submitButton.disabled = disabled;
+    if (disabled) {
+      this.dropzone.dataset.disabled = "true";
+    } else {
+      delete this.dropzone.dataset.disabled;
+    }
   }
   async showDialog() {
     if (!this.dialog.open) {
@@ -269,45 +324,65 @@ var WidgetController = class {
       item.zoom = 1;
       this.renderSelectedImage();
     }
-    this.message.focus();
+    if (!this.message.disabled) {
+      this.message.focus();
+    }
   }
   async addFiles(files) {
     if (!files) {
       return;
     }
     this.clearMessages();
-    for (const file of Array.from(files)) {
-      if (this.images.length >= MAX_FILES) {
-        this.setError(this.config.labels.fileLimit);
+    const labels2 = this.config.labels;
+    const maxFileSize = this.limits.maxFileSizeKb * 1024;
+    const maxTotalSize = this.limits.maxTotalSizeKb * 1024;
+    const selected = Array.from(files);
+    this.fileInput.value = "";
+    for (const file of selected) {
+      if (this.images.length + this.pendingFiles >= this.limits.maxFiles) {
+        this.setError(formatLabel(labels2.fileLimit, this.limits));
         break;
       }
-      if (!ACCEPTED_TYPES.includes(file.type)) {
-        this.setError(this.config.labels.invalidType.replace("{filename}", file.name));
+      if (!this.limits.allowedMimes.includes(file.type)) {
+        this.setError(formatLabel(labels2.invalidType, this.limits, { filename: file.name }));
         continue;
       }
-      if (file.size > MAX_FILE_SIZE) {
-        this.setError(this.config.labels.fileTooLarge.replace("{filename}", file.name));
+      if (file.size > maxFileSize) {
+        this.setError(formatLabel(labels2.fileTooLarge, this.limits, { filename: file.name }));
         continue;
       }
-      if (this.totalOriginalSize() + file.size > MAX_TOTAL_SIZE) {
-        this.setError(this.config.labels.totalTooLarge);
+      if (this.totalOriginalSize() + this.pendingBytes + file.size > maxTotalSize) {
+        this.setError(formatLabel(labels2.totalTooLarge, this.limits));
         break;
       }
+      this.pendingFiles += 1;
+      this.pendingBytes += file.size;
+      const generation = this.generation;
       try {
-        await this.addImage(file, file.name, "attachment");
+        await this.addImage(file, file.name, "attachment", generation);
       } catch {
-        this.setError(this.config.labels.invalidType.replace("{filename}", file.name));
+        if (generation === this.generation) {
+          this.setError(formatLabel(labels2.invalidType, this.limits, { filename: file.name }));
+        }
+      } finally {
+        if (generation === this.generation) {
+          this.pendingFiles -= 1;
+          this.pendingBytes -= file.size;
+        }
       }
     }
-    this.fileInput.value = "";
   }
-  async addImage(blob, filename, source) {
+  async addImage(blob, filename, source, generation = this.generation) {
     const objectUrl = URL.createObjectURL(blob);
     try {
       const image = await this.loadImage(objectUrl);
+      if (generation !== this.generation) {
+        URL.revokeObjectURL(objectUrl);
+        return;
+      }
       const dimensions = this.getStageDimensions(image);
       const editableImage = {
-        id: crypto.randomUUID(),
+        id: createId(),
         blob,
         filename,
         source,
@@ -370,7 +445,11 @@ var WidgetController = class {
       if (!thumbnail || !selectButton || !removeButton || !image || !label) {
         continue;
       }
-      thumbnail.dataset.selected = String(item.id === this.selectedImageId);
+      const isSelected = item.id === this.selectedImageId;
+      thumbnail.dataset.selected = String(isSelected);
+      if (isSelected) {
+        selectButton.setAttribute("aria-current", "true");
+      }
       image.src = item.objectUrl;
       image.alt = item.filename;
       label.textContent = item.filename;
@@ -386,7 +465,7 @@ var WidgetController = class {
       removeButton.addEventListener("click", () => this.removeImage(item.id));
       this.thumbnails.append(fragment);
     }
-    this.count.textContent = `${this.images.length} / ${MAX_FILES}`;
+    this.count.textContent = `${this.images.length} / ${this.limits.maxFiles}`;
     this.updateControls();
   }
   removeImage(imageId) {
@@ -723,32 +802,49 @@ var WidgetController = class {
     if (this.isSubmitting || !this.form.reportValidity()) {
       return;
     }
+    const labels2 = this.config.labels;
+    const message = this.message.value.trim();
+    if (message === "") {
+      this.setError(labels2.blankMessage);
+      this.message.focus();
+      return;
+    }
     this.clearMessages();
     this.isSubmitting = true;
     this.submitButton.disabled = true;
-    this.submitButton.textContent = this.config.labels.submitting;
+    this.submitButton.textContent = labels2.submitting;
+    const controller = new AbortController();
+    this.submitController = controller;
+    const generation = this.generation;
     try {
-      if (!await this.reporter.isAvailable()) {
-        throw new Error(this.config.labels.unavailable);
+      const availability = await this.reporter.getAvailability(controller.signal);
+      if (!availability.available) {
+        throw new AvailabilityError(labels2.unavailable, 200);
       }
+      this.applyLimits(availability.limits);
+      const maxFileSize = this.limits.maxFileSizeKb * 1024;
+      const maxTotalSize = this.limits.maxTotalSizeKb * 1024;
       const attachments = [];
       let totalSize = 0;
       for (const item of this.images) {
         const blob = await this.exportImage(item);
-        if (blob.size > MAX_FILE_SIZE) {
+        if (blob.size > maxFileSize) {
           throw new Error(
-            this.config.labels.editedFileTooLarge.replace("{filename}", item.filename)
+            formatLabel(labels2.editedFileTooLarge, this.limits, { filename: item.filename })
           );
         }
         totalSize += blob.size;
-        if (totalSize > MAX_TOTAL_SIZE) {
-          throw new Error(this.config.labels.editedTotalTooLarge);
+        if (totalSize > maxTotalSize) {
+          throw new Error(formatLabel(labels2.editedTotalTooLarge, this.limits));
         }
         attachments.push({ file: blob, source: item.source, filename: item.filename });
       }
       await this.reporter.submit({
-        message: this.message.value.trim(),
+        message,
         attachments,
+        signal: controller.signal,
+        // Reused across retries of this draft so the server can deduplicate it.
+        clientReportId: this.clientReportId,
         metadata: {
           source_type: this.config.sourceType,
           route_name: this.config.routeName,
@@ -760,8 +856,11 @@ var WidgetController = class {
           }))
         }
       });
+      if (generation !== this.generation) {
+        return;
+      }
       this.resetContent();
-      this.successMessage.textContent = this.config.labels.success;
+      this.successMessage.textContent = labels2.success;
       this.successMessage.hidden = false;
       this.successCloseTimer = window.setTimeout(() => {
         this.successCloseTimer = null;
@@ -770,11 +869,18 @@ var WidgetController = class {
         }
       }, SUCCESS_CLOSE_DELAY);
     } catch (error) {
-      this.setError(this.errorText(error));
+      if (generation === this.generation && !controller.signal.aborted) {
+        this.setError(this.errorText(error));
+      }
     } finally {
-      this.isSubmitting = false;
-      this.submitButton.disabled = false;
-      this.submitButton.textContent = this.config.labels.submit;
+      if (this.submitController === controller) {
+        this.submitController = null;
+      }
+      if (generation === this.generation) {
+        this.isSubmitting = false;
+        this.submitButton.disabled = false;
+        this.submitButton.textContent = labels2.submit;
+      }
     }
   }
   async exportImage(item) {
@@ -804,16 +910,26 @@ var WidgetController = class {
     if (!(error instanceof Error)) {
       return this.config.labels.submitFailed;
     }
-    if (error.name === "ValidationError") {
-      return this.config.labels.validationFailed;
+    const labels2 = this.config.labels;
+    const byName = {
+      ValidationError: labels2.validationFailed,
+      RateLimitError: labels2.rateLimited,
+      AvailabilityError: labels2.unavailable,
+      AttachmentValidationError: labels2.attachmentRejected,
+      SessionExpiredError: labels2.sessionExpired,
+      PayloadTooLargeError: labels2.payloadTooLarge,
+      TimeoutError: labels2.timeout,
+      ServerError: labels2.serverError
+    };
+    const mapped = byName[error.name];
+    if (mapped) {
+      return mapped;
     }
-    if (error.name === "RateLimitError") {
-      return this.config.labels.rateLimited;
+    if (error.name === "TransportError") {
+      const statusCode = error.statusCode;
+      return statusCode === void 0 ? labels2.networkError : labels2.submitFailed;
     }
-    if (error.name === "AvailabilityError") {
-      return this.config.labels.unavailable;
-    }
-    return error.message || this.config.labels.submitFailed;
+    return error.message || labels2.submitFailed;
   }
   setError(message) {
     this.successMessage.hidden = true;
@@ -861,6 +977,9 @@ var WidgetController = class {
     }
     this.images = [];
     this.selectedImageId = null;
+    this.pendingFiles = 0;
+    this.pendingBytes = 0;
+    this.clientReportId = createId();
     this.message.value = "";
     this.fileInput.value = "";
     this.renderThumbnails();
@@ -868,9 +987,13 @@ var WidgetController = class {
     this.canvasHost.hidden = true;
   }
   reset() {
+    this.abortSubmit();
+    this.generation += 1;
     if (this.isSubmitting) {
-      return;
+      this.isSubmitting = false;
+      this.submitButton.textContent = this.config.labels.submit;
     }
+    this.setFormDisabled(false);
     if (this.successCloseTimer !== null) {
       window.clearTimeout(this.successCloseTimer);
       this.successCloseTimer = null;
@@ -880,6 +1003,8 @@ var WidgetController = class {
     this.setTool("move");
   }
   destroy() {
+    this.abortSubmit();
+    this.generation += 1;
     this.reporter.destroyDiagnostics();
     if (this.successCloseTimer !== null) {
       window.clearTimeout(this.successCloseTimer);
@@ -894,7 +1019,7 @@ var WidgetController = class {
 var labels = {
   ja: {
     launcher: "\u30D5\u30A3\u30FC\u30C9\u30D0\u30C3\u30AF\u3092\u5831\u544A",
-    eyebrow: "Feedback report",
+    eyebrow: "\u30D5\u30A3\u30FC\u30C9\u30D0\u30C3\u30AF",
     title: "\u30D5\u30A3\u30FC\u30C9\u30D0\u30C3\u30AF\u3092\u5831\u544A",
     description: "\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u3084\u753B\u50CF\u3068\u8A3A\u65AD\u60C5\u5831\u3092\u5B89\u5168\u306B\u9001\u4FE1\u3057\u307E\u3059\u3002",
     close: "\u9589\u3058\u308B",
@@ -903,7 +1028,7 @@ var labels = {
     images: "\u30B9\u30AF\u30EA\u30FC\u30F3\u30B7\u30E7\u30C3\u30C8\u30FB\u753B\u50CF\uFF08\u4EFB\u610F\uFF09",
     chooseImages: "\u753B\u50CF\u3092\u9078\u629E",
     dropHint: "\u307E\u305F\u306F\u30C9\u30E9\u30C3\u30B0\uFF06\u30C9\u30ED\u30C3\u30D7",
-    fileHint: "PNG / JPEG / WebP\u30FB1\u679A5MB\u307E\u3067",
+    fileHint: "{types}\u30FB1\u679A{maxFileSize}MB\u307E\u3067",
     attachments: "\u6DFB\u4ED8\u753B\u50CF",
     removeAttachment: "\u6DFB\u4ED8\u753B\u50CF\u300C{filename}\u300D\u3092\u524A\u9664",
     move: "\u79FB\u52D5",
@@ -922,16 +1047,23 @@ var labels = {
     submit: "\u30EC\u30DD\u30FC\u30C8\u3092\u9001\u4FE1",
     submitting: "\u9001\u4FE1\u4E2D\u2026",
     unavailable: "\u73FE\u5728\u3001\u3053\u306E\u753B\u9762\u304B\u3089\u30EC\u30DD\u30FC\u30C8\u3092\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3002",
-    fileLimit: "\u6DFB\u4ED8\u3067\u304D\u308B\u753B\u50CF\u306F\u5408\u8A085\u679A\u307E\u3067\u3067\u3059\u3002",
-    invalidType: "{filename} \u306F\u6709\u52B9\u306APNG\u3001JPEG\u3001WebP\u753B\u50CF\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
-    fileTooLarge: "{filename} \u306F5MB\u3092\u8D85\u3048\u3066\u3044\u307E\u3059\u3002",
-    totalTooLarge: "\u6DFB\u4ED8\u753B\u50CF\u306E\u5408\u8A08\u30B5\u30A4\u30BA\u306F20MB\u307E\u3067\u3067\u3059\u3002",
-    editedFileTooLarge: "{filename} \u306E\u7DE8\u96C6\u5F8C\u30B5\u30A4\u30BA\u304C5MB\u3092\u8D85\u3048\u3066\u3044\u307E\u3059\u3002",
-    editedTotalTooLarge: "\u7DE8\u96C6\u5F8C\u306E\u6DFB\u4ED8\u753B\u50CF\u306E\u5408\u8A08\u30B5\u30A4\u30BA\u304C20MB\u3092\u8D85\u3048\u3066\u3044\u307E\u3059\u3002",
+    blankMessage: "\u30EC\u30DD\u30FC\u30C8\u30E1\u30C3\u30BB\u30FC\u30B8\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    fileLimit: "\u6DFB\u4ED8\u3067\u304D\u308B\u753B\u50CF\u306F\u5408\u8A08{maxFiles}\u679A\u307E\u3067\u3067\u3059\u3002",
+    invalidType: "{filename} \u306F\u5BFE\u5FDC\u3057\u3066\u3044\u308B\u753B\u50CF\u5F62\u5F0F\uFF08{types}\uFF09\u3067\u306F\u3042\u308A\u307E\u305B\u3093\u3002",
+    fileTooLarge: "{filename} \u306F{maxFileSize}MB\u3092\u8D85\u3048\u3066\u3044\u307E\u3059\u3002",
+    totalTooLarge: "\u6DFB\u4ED8\u753B\u50CF\u306E\u5408\u8A08\u30B5\u30A4\u30BA\u306F{maxTotalSize}MB\u307E\u3067\u3067\u3059\u3002",
+    editedFileTooLarge: "{filename} \u306E\u7DE8\u96C6\u5F8C\u30B5\u30A4\u30BA\u304C{maxFileSize}MB\u3092\u8D85\u3048\u3066\u3044\u307E\u3059\u3002",
+    editedTotalTooLarge: "\u7DE8\u96C6\u5F8C\u306E\u6DFB\u4ED8\u753B\u50CF\u306E\u5408\u8A08\u30B5\u30A4\u30BA\u304C{maxTotalSize}MB\u3092\u8D85\u3048\u3066\u3044\u307E\u3059\u3002",
     exportFailed: "\u6CE8\u91C8\u753B\u50CF\u3092\u751F\u6210\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002",
     submitFailed: "\u30EC\u30DD\u30FC\u30C8\u3092\u9001\u4FE1\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u6642\u9593\u3092\u304A\u3044\u3066\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     validationFailed: "\u5165\u529B\u5185\u5BB9\u307E\u305F\u306F\u6DFB\u4ED8\u753B\u50CF\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     rateLimited: "\u9001\u4FE1\u56DE\u6570\u304C\u4E0A\u9650\u306B\u9054\u3057\u307E\u3057\u305F\u3002\u3057\u3070\u3089\u304F\u5F85\u3063\u3066\u304B\u3089\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    attachmentRejected: "\u6DFB\u4ED8\u753B\u50CF\u306E\u679A\u6570\u3001\u5F62\u5F0F\u3001\u307E\u305F\u306F\u30B5\u30A4\u30BA\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    sessionExpired: "\u30BB\u30C3\u30B7\u30E7\u30F3\u306E\u6709\u52B9\u671F\u9650\u304C\u5207\u308C\u307E\u3057\u305F\u3002\u30DA\u30FC\u30B8\u3092\u518D\u8AAD\u307F\u8FBC\u307F\u3057\u3066\u304B\u3089\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    payloadTooLarge: "\u9001\u4FE1\u30C7\u30FC\u30BF\u304C\u5927\u304D\u3059\u304E\u307E\u3059\u3002\u753B\u50CF\u306E\u679A\u6570\u3084\u30B5\u30A4\u30BA\u3092\u6E1B\u3089\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    timeout: "\u901A\u4FE1\u304C\u30BF\u30A4\u30E0\u30A2\u30A6\u30C8\u3057\u307E\u3057\u305F\u3002\u6642\u9593\u3092\u304A\u3044\u3066\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    networkError: "\u30CD\u30C3\u30C8\u30EF\u30FC\u30AF\u306B\u63A5\u7D9A\u3067\u304D\u307E\u305B\u3093\u3067\u3057\u305F\u3002\u63A5\u7D9A\u3092\u78BA\u8A8D\u3057\u3066\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
+    serverError: "\u30B5\u30FC\u30D0\u30FC\u3067\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002\u6642\u9593\u3092\u304A\u3044\u3066\u518D\u8A66\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002",
     success: "\u9001\u4FE1\u304C\u5B8C\u4E86\u3057\u307E\u3057\u305F\u3002\u3053\u306E\u753B\u9762\u3092\u9589\u3058\u307E\u3059\u3002"
   },
   en: {
@@ -945,7 +1077,7 @@ var labels = {
     images: "Screenshots or images (optional)",
     chooseImages: "Choose images",
     dropHint: "or drag and drop",
-    fileHint: "PNG / JPEG / WebP \xB7 up to 5 MB each",
+    fileHint: "{types} \xB7 up to {maxFileSize} MB each",
     attachments: "Attached images",
     removeAttachment: "Remove attached image {filename}",
     move: "Move",
@@ -964,16 +1096,23 @@ var labels = {
     submit: "Send report",
     submitting: "Sending\u2026",
     unavailable: "Feedback reporting is currently unavailable.",
-    fileLimit: "You can attach up to 5 images.",
-    invalidType: "{filename} is not a valid PNG, JPEG, or WebP image.",
-    fileTooLarge: "{filename} exceeds 5 MB.",
-    totalTooLarge: "Attachments may total up to 20 MB.",
-    editedFileTooLarge: "{filename} exceeds 5 MB after editing.",
-    editedTotalTooLarge: "Edited attachments exceed 20 MB in total.",
+    blankMessage: "Enter a feedback message.",
+    fileLimit: "You can attach up to {maxFiles} images.",
+    invalidType: "{filename} is not a supported image type ({types}).",
+    fileTooLarge: "{filename} exceeds {maxFileSize} MB.",
+    totalTooLarge: "Attachments may total up to {maxTotalSize} MB.",
+    editedFileTooLarge: "{filename} exceeds {maxFileSize} MB after editing.",
+    editedTotalTooLarge: "Edited attachments exceed {maxTotalSize} MB in total.",
     exportFailed: "The annotated image could not be generated.",
     submitFailed: "The report could not be sent. Please try again later.",
     validationFailed: "Check the message and attached images.",
     rateLimited: "Too many reports were sent. Please try again later.",
+    attachmentRejected: "Check the number, type, and size of the attached images.",
+    sessionExpired: "Your session has expired. Reload the page and try again.",
+    payloadTooLarge: "The report is too large. Attach fewer or smaller images.",
+    timeout: "The request timed out. Please try again later.",
+    networkError: "The network could not be reached. Check your connection and try again.",
+    serverError: "The server encountered an error. Please try again later.",
     success: "Your feedback was sent. This dialog will close."
   }
 };
@@ -998,9 +1137,9 @@ function widgetTemplate(text) {
                     <header><div><p class="eyebrow">${text.eyebrow}</p><h2 id="feedback-dialog-title">${text.title}</h2><p class="description">${text.description}</p></div><button type="button" data-feedback-close class="icon-button" aria-label="${text.close}">\u2715</button></header>
                     <div class="body">
                         <section class="sidebar">
-                            <label class="field"><span>${text.message} <b>*</b></span><textarea data-feedback-message required maxlength="10000" rows="6" placeholder="${text.messagePlaceholder}"></textarea></label>
-                            <div class="field"><span>${text.images}</span><label data-feedback-dropzone class="dropzone"><span class="plus" aria-hidden="true">\uFF0B</span><span><strong>${text.chooseImages}</strong> ${text.dropHint}</span><small>${text.fileHint}</small><input data-feedback-files type="file" accept="image/png,image/jpeg,image/webp" multiple></label></div>
-                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / 5</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><div data-feedback-thumbnail class="thumbnail"><button type="button" data-feedback-thumbnail-select class="thumbnail-select"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button><button type="button" data-feedback-remove-image class="thumbnail-remove"></button></div></template></div>
+                            <label class="field"><span>${text.message} <b>*</b></span><textarea data-feedback-message required maxlength="${DEFAULT_LIMITS.maxMessageLength}" rows="6" placeholder="${text.messagePlaceholder}"></textarea></label>
+                            <div class="field"><span>${text.images}</span><label data-feedback-dropzone class="dropzone"><span class="plus" aria-hidden="true">\uFF0B</span><span><strong>${text.chooseImages}</strong> ${text.dropHint}</span><small data-feedback-file-hint>${formatLabel(text.fileHint, resolveLimits())}</small><input data-feedback-files type="file" accept="${DEFAULT_LIMITS.allowedMimes.join(",")}" multiple></label></div>
+                            <div><div class="attachment-heading"><span>${text.attachments}</span><span data-feedback-count>0 / ${DEFAULT_LIMITS.maxFiles}</span></div><div data-feedback-thumbnails class="thumbnails"></div><template data-feedback-thumbnail-template><div data-feedback-thumbnail class="thumbnail"><button type="button" data-feedback-thumbnail-select class="thumbnail-select"><img data-thumbnail-image alt=""><span data-thumbnail-label></span></button><button type="button" data-feedback-remove-image class="thumbnail-remove"></button></div></template></div>
                         </section>
                         <section class="editor">
                             <div data-feedback-viewport class="viewport"><div class="viewport-inner"><p data-feedback-empty>${text.empty}</p><div data-feedback-canvas class="canvas-host"></div></div></div>
@@ -1014,22 +1153,35 @@ function widgetTemplate(text) {
                             </div>
                         </section>
                     </div>
-                    <footer><div aria-live="polite" class="messages"><p data-feedback-error hidden></p><p data-feedback-success role="status" hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
+                    <footer><div aria-live="polite" class="messages"><p data-feedback-error role="alert" hidden></p><p data-feedback-success role="status" hidden></p></div><div class="footer-actions"><button type="button" data-feedback-cancel>${text.cancel}</button><button type="submit" data-feedback-submit class="primary">${text.submit}</button></div></footer>
                 </form>
             </dialog>
         </div>
     `;
 }
-var FeedbackReporterElement = class extends HTMLElement {
+var HTMLElementBase = typeof HTMLElement === "undefined" ? class {
+} : HTMLElement;
+var FeedbackReporterElement = class extends HTMLElementBase {
   controller = null;
   widgetConfig = {};
+  /**
+   * Programmatic configuration. Attributes take precedence over these values.
+   * Assigning it after the element is connected rebuilds the widget, which discards
+   * any draft in progress.
+   */
   set config(config) {
-    this.widgetConfig = config;
+    this.widgetConfig = config ?? {};
+    if (this.controller) {
+      this.controller.destroy();
+      this.controller = null;
+      this.connectedCallback();
+    }
   }
   get config() {
     return this.widgetConfig;
   }
   connectedCallback() {
+    this.upgradeConfigProperty();
     if (this.controller) {
       return;
     }
@@ -1040,11 +1192,24 @@ var FeedbackReporterElement = class extends HTMLElement {
       endpoint: this.getAttribute("endpoint") ?? this.widgetConfig.endpoint,
       availabilityEndpoint: this.getAttribute("availability-endpoint") ?? this.widgetConfig.availabilityEndpoint,
       sourceType: this.getAttribute("source-type") ?? this.widgetConfig.sourceType ?? "web_site",
-      routeName: this.getAttribute("route-name") ?? this.widgetConfig.routeName ?? null,
-      panelId: this.getAttribute("panel-id") ?? this.widgetConfig.panelId ?? null,
+      // Empty attributes (e.g. an unnamed Blade route) are treated as unset.
+      routeName: this.getAttribute("route-name") || this.widgetConfig.routeName || null,
+      panelId: this.getAttribute("panel-id") || this.widgetConfig.panelId || null,
       reporter: this.widgetConfig.reporter,
       labels: labels[locale]
     });
+  }
+  /**
+   * A `config` value assigned before the element was upgraded is stored as an own
+   * property that shadows the accessor. Move it through the setter instead.
+   */
+  upgradeConfigProperty() {
+    if (!Object.hasOwn(this, "config")) {
+      return;
+    }
+    const value = this.config;
+    delete this.config;
+    this.widgetConfig = value ?? {};
   }
   disconnectedCallback() {
     this.controller?.destroy();
@@ -1059,6 +1224,9 @@ var FeedbackReporterElement = class extends HTMLElement {
 };
 var registeredElementConstructors = /* @__PURE__ */ new Map();
 function registerFeedbackReporterElement(tagName = "trust-feedback-reporter") {
+  if (typeof customElements === "undefined") {
+    return;
+  }
   const current = customElements.get(tagName);
   const registered = registeredElementConstructors.get(tagName);
   if (current && current !== registered) {

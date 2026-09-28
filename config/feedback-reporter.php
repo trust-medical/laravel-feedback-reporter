@@ -144,6 +144,25 @@ return [
             'image/webp',
         ],
 
+        // Maximum pixels (width × height) per image. Rejects decompression bombs
+        // while allowing tall full-page screenshots. Set to null to disable.
+        'max_pixels' => 40000000,
+
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Retention
+    |--------------------------------------------------------------------------
+    |
+    | Reports older than the given number of days, and their attachment files,
+    | are deleted by `php artisan model:prune`. Null disables pruning.
+    |
+    */
+    'retention' => [
+
+        'days' => null,
+
     ],
 
     /*

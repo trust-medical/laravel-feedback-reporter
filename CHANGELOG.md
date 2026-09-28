@@ -2,6 +2,44 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## 4.4.0 - 2026-09-28
+
+### Added
+- The availability endpoint returns the server's upload, message, and metadata `limits` when the reporter is available. The SDK, Alpine adapter, and Widget apply them before uploading.
+- `retention.days` and `Prunable` support for `FeedbackReport`. Deleting reports or attachments through Eloquent, or pruning them, also deletes their stored files.
+- `attachments.max_pixels` (default 40,000,000) rejects images with excessive pixel counts.
+- Indexes on `feedback_reports.created_at` and `feedback_attachments (feedback_report_id, sort_order)`.
+- SDK: `getAvailability()`, `getLimits()`, `fetchAvailability()`, `createId()`, the `clientReportId` submit option, and the `timeoutMs` config (default 60000).
+- SDK errors: `SessionExpiredError` (419), `PayloadTooLargeError` (413), and `TimeoutError`.
+- Alpine adapter: `destroy()`, `markEdited()`, `fieldErrors`, `lastError`, and `clientReportId`.
+- `sanitizeUrl` now implements `query.mode: 'exclude'`.
+- The Workbench runs with `make serve`.
+
+### Changed
+- A repeated `client_report_id` from the same submitter returns the existing report with `200` and `"duplicate": true` instead of 422. This applies to concurrent duplicates too. A key used by another submitter is still rejected with 422. `client_report_id` must match `^[A-Za-z0-9_-]{8,64}$`.
+- Invalid, oversized, or too deeply nested metadata now returns 422 before any file is written, instead of 500. Scalar JSON metadata is rejected.
+- Package routes always respond with JSON.
+- The Widget and Alpine adapter reuse one `client_report_id` per draft across retries.
+- Diagnostic context includes only the continuous collectors enabled by the reporter that submits.
+- The Composer package now requires `laravel/framework` and `ext-fileinfo` instead of individual `illuminate/*` packages, matching the framework classes it uses.
+- When a published configuration omits `availability.environments`, the package falls back to `local` and `staging` instead of all environments.
+- `FeedbackReport` hides `ip_address` and `user_agent` when serialized. Stored User-Agent values are truncated to 1024 characters.
+
+### Fixed
+- An exception in a `FeedbackStored` listener no longer deletes the files of a report that was already committed. The event is dispatched after the outermost transaction commits.
+- Out-of-range viewport or screen values, an empty `allowed_mimes` list, and a missing policy class no longer cause 500 errors.
+- The Widget works on non-secure origins, where `crypto.randomUUID()` is unavailable. When the reporter is unavailable, it shows a visible message. Requests are aborted when the Widget is closed or disconnected. All errors are localized. The Widget can be imported during SSR. It applies a `config` assigned after connection or before upgrade.
+- Empty `route-name` and `panel-id` attributes are treated as unset.
+- The SDK truncates `page_title` and `page_url` to the server limits and rejects oversized metadata before uploading.
+- The Workbench serves the built Widget and Konva and works without a login.
+
+### Security
+- `page_url` must use `http` or `https`.
+- Unavailable responses no longer include a message that identifies the package. `disabled_response` accepts only 403 or 404.
+- Attachments are stored with private visibility. Stored extensions come from the detected MIME type, not the client filename.
+- Error filenames, stack URLs, storage values, and console arguments are sanitized or bounded before they are reported.
+- CI runs weekly and audits Composer dependencies after resolving each Laravel version.
+
 ## 4.3.0 - 2026-09-28
 
 ### Added

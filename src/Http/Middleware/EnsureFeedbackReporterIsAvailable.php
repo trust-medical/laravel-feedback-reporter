@@ -26,7 +26,8 @@ class EnsureFeedbackReporterIsAvailable
         try {
             $this->checker->ensureAvailable($request);
         } catch (AvailabilityException $e) {
-            abort($e->statusCode, $e->getMessage());
+            // Respond without a message so the body does not reveal the package
+            abort($e->statusCode, '');
         }
 
         return $next($request);

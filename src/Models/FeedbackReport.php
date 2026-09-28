@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace TrustMedical\FeedbackReporter\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -32,7 +34,7 @@ use Illuminate\Support\Carbon;
  */
 class FeedbackReport extends Model
 {
-    use HasUlids;
+    use HasUlids, Prunable;
 
     /**
      * The table associated with the model.
@@ -47,6 +49,16 @@ class FeedbackReport extends Model
      * @var array<int, string>
      */
     protected $guarded = [];
+
+    /**
+     * The attributes that should be hidden for serialization.
+     *
+     * @var list<string>
+     */
+    protected $hidden = [
+        'ip_address',
+        'user_agent',
+    ];
 
     /**
      * The attributes that should be cast.
@@ -70,5 +82,36 @@ class FeedbackReport extends Model
     {
         return $this->hasMany(FeedbackAttachment::class, 'feedback_report_id', 'id')
             ->orderBy('sort_order');
+    }
+
+    /**
+     * Bootstrap the model and its traits.
+     */
+    protected static function booted(): void
+    {
+        // Delete attachments through Eloquent so their files are removed; the database
+        // cascade alone does not fire model events.
+        static::deleting(function (FeedbackReport $report): void {
+            $report->attachments()->get()->each(
+                static fn (FeedbackAttachment $attachment): ?bool => $attachment->delete()
+            );
+        });
+    }
+
+    /**
+     * Get the prunable model query based on the configured retention period.
+     *
+     * @return Builder<static>
+     */
+    public function prunable(): Builder
+    {
+        $days = config('feedback-reporter.retention.days');
+
+        if ($days === null || (int) $days < 1) {
+            // Retention is disabled: match nothing
+            return static::query()->whereRaw('1 = 0');
+        }
+
+        return static::query()->where('created_at', '<', now()->subDays((int) $days));
     }
 }
