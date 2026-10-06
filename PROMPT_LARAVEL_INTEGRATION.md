@@ -52,7 +52,7 @@ The third layer is the security boundary. Client-side hiding never replaces serv
 Install the frontend package from its Git tag. The import name stays `@trust-medical/feedback-reporter`:
 
 ```bash
-npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
+npm install github:trust-medical/laravel-feedback-reporter#v4.4.1
 ```
 
 Create one small Vite entry that only registers the custom element:

@@ -81,7 +81,7 @@ FEEDBACK_REPORTER_ENABLED=true
 Install the frontend package from a Git tag when using the Widget or headless SDK:
 
 ```bash
-npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
+npm install github:trust-medical/laravel-feedback-reporter#v4.4.1
 ```
 
 The package keeps its `@trust-medical/feedback-reporter` import name. npm pins the Git tag instead of a semver range, so change the tag explicitly when upgrading.

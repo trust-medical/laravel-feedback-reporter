@@ -81,7 +81,7 @@ FEEDBACK_REPORTER_ENABLED=true
 Widgetまたはheadless SDKを使う場合は、Git tagを指定してfrontend packageも追加します。
 
 ```bash
-npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
+npm install github:trust-medical/laravel-feedback-reporter#v4.4.1
 ```
 
 import名は `@trust-medical/feedback-reporter` のままです。npmはsemver範囲ではなくGit tagを固定するため、更新時はtagを明示的に変更してください。
