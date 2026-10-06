@@ -52,7 +52,7 @@ security boundaryは三層目です。client側の非表示はserver認可の代
 Git tagを指定してfrontend packageをinstallします。import名は `@trust-medical/feedback-reporter` のままです。
 
 ```bash
-npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
+npm install github:trust-medical/laravel-feedback-reporter#v4.4.1
 ```
 
 custom elementの登録だけを行う小さなVite entryを1つ作ります。

@@ -64,7 +64,7 @@ export class ServerError extends TransportError {
 
 export class SessionExpiredError extends TransportError {
   constructor(
-    message: string = 'The session or CSRF token has expired. Reload the page and try again.',
+    message: string = 'The session or CSRF token is missing or has expired. Reload the page and try again. If the page is not served by Laravel, check the CSRF settings of the reporter routes.',
     statusCode: number = 419,
   ) {
     super(message, statusCode)

@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use TrustMedical\FeedbackReporter\Contracts\FeedbackAvailability;
 use TrustMedical\FeedbackReporter\FeedbackReporter;
 
 afterEach(function () {
@@ -106,4 +108,54 @@ it('rate limits the availability endpoint independently of submissions', functio
     $this->getJson($availabilityUrl)->assertStatus(429);
 
     $this->postJson(route('feedback-reporter.store'), [])->assertStatus(422);
+});
+
+it('serves guests without starting a session when the routes use the api middleware', function () {
+    FeedbackReporter::routes(null, [
+        'prefix' => 'static-page/feedback',
+        'as' => 'static-page.feedback.',
+        'middleware' => ['api'],
+    ]);
+
+    $sessionCookie = (string) config('session.cookie');
+
+    $this->getJson(route('static-page.feedback.availability'))
+        ->assertOk()
+        ->assertJson(['available' => true])
+        ->assertCookieMissing($sessionCookie);
+
+    $this->postJson(route('static-page.feedback.store'), ['message' => 'From a static page'])
+        ->assertCreated()
+        ->assertJson(['success' => true])
+        ->assertCookieMissing($sessionCookie);
+
+    $this->assertDatabaseHas('feedback_reports', ['message' => 'From a static page']);
+});
+
+it('lets a policy gate the routes on a request header sent by the frontend', function () {
+    config([
+        'feedback-reporter.availability.policy' => new class implements FeedbackAvailability
+        {
+            public function isAvailable(Request $request): bool
+            {
+                return $request->header('X-Feedback-Token') === 'shared-token';
+            }
+        },
+    ]);
+
+    $this->getJson(route('feedback-reporter.availability'))
+        ->assertOk()
+        ->assertExactJson(['available' => false]);
+
+    $this->getJson(route('feedback-reporter.availability'), ['X-Feedback-Token' => 'shared-token'])
+        ->assertOk()
+        ->assertJson(['available' => true]);
+
+    $this->postJson(route('feedback-reporter.store'), ['message' => 'No token'])->assertNotFound();
+
+    $this->postJson(
+        route('feedback-reporter.store'),
+        ['message' => 'With token'],
+        ['X-Feedback-Token' => 'shared-token'],
+    )->assertCreated();
 });
