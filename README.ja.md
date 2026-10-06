@@ -86,7 +86,7 @@ npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
 
 import名は `@trust-medical/feedback-reporter` のままです。npmはsemver範囲ではなくGit tagを固定するため、更新時はtagを明示的に変更してください。
 
-frontendからPOSTするlayoutにはLaravelのCSRF tokenを配置します。
+frontendからPOSTするlayoutにはLaravelのCSRF tokenを配置します。静的HTMLなどLaravelが描画しないページで使う場合は、[Laravel viewを使わないfrontend利用](#laravel-viewを使わないfrontend利用)を参照してください。
 
 ```blade
 <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -194,10 +194,10 @@ registerFeedbackReporterElement()
 
 | 属性 | 既定値 | 内容 |
 | --- | --- | --- |
-| `endpoint` | `/feedback-reporter/reports` | report送信先URL |
-| `availability-endpoint` | `/feedback-reporter/availability` | 利用可否確認URL |
+| `endpoint` | `/feedback-reporter/reports` | report送信先URL。別originのページから使う場合は絶対URLを指定します |
+| `availability-endpoint` | `/feedback-reporter/availability` | 利用可否確認URL。別originのページから使う場合は絶対URLを指定します |
 | `source-type` | `web_site` | metadataへ保存するapplication定義の報告元 |
-| `route-name` | なし | metadataへ保存する現在のroute |
+| `route-name` | なし | metadataへ保存する現在のroute。任意です。Laravelが描画しないページでは省略できます |
 | `panel-id` | なし | 任意の管理panel識別子 |
 | `lang` | document言語 | `ja` で始まれば日本語、それ以外は英語 |
 | `color-scheme` | `auto` | `auto`、`light`、`dark` |
@@ -317,7 +317,7 @@ SDKはupload前に添付の枚数、1枚のsize、合計size、MIMEを確認し�
 
 `SessionExpiredError`、`PayloadTooLargeError`、`TimeoutError` は `TransportError` を継承します。`duplicate: true` の `200` responseは成功として扱います。
 
-設定では、独自CSRF解決、同期・非同期header、URL sanitization、storage key allowlist、同期・非同期metadata、診断、lifecycle callbackを指定できます。既定ではLaravelの `meta[name="csrf-token"]` を読み取ります。`FormData` の `Content-Type` はbrowserがboundaryとともに設定するため、独自headerへ追加しないでください。
+設定では、独自CSRF解決、同期・非同期header（利用可否確認と送信の両方に付与されます）、URL sanitization、storage key allowlist、同期・非同期metadata、診断、lifecycle callbackを指定できます。既定ではLaravelの `meta[name="csrf-token"]` を読み取ります。`FormData` の `Content-Type` はbrowserがboundaryとともに設定するため、独自headerへ追加しないでください。
 
 ### Alpine adapter
 
@@ -333,6 +333,96 @@ Alpine.data('feedbackReporter', () =>
 ```
 
 adapterはmessage、attachments、availability、送信状態、直近response、`lastError`、field単位の `fieldErrors`、添付helper、`submit()` を公開します。`available` は `init()` が利用可否の確認を終えるまで `null` です。`submit()` は失敗を再送出せずstateへ記録し、送信に成功するまでretryでは同じ `clientReportId` を使います。利用者が下書きを変更したら `markEdited()` を呼んで前回の成功状態を消し、componentを削除するときは `destroy()` を呼んでください。`addAttachment()` のsource既定値は `attachment` です。
+
+## Laravel viewを使わないfrontend利用
+
+Widgetとheadless SDKはLaravel、Blade、Viteに依存しないES moduleなので、静的HTMLページでも動作します。受信routeは、このpackageを導入したLaravel applicationが提供する必要があります。Laravelが描画するページへの影響はありません。既定値（`web` middleware、layoutのCSRF token、認証済みuserのみ）は変わらず、以下の設定はLaravelのsessionを持たないページ向けです。
+
+### bundlerなしで読み込む
+
+`widget.js` は `konva` をbare module specifierでimportするため、browserだけでは解決できません。bundlerを使わない場合はimport mapで対応付けます。pathはページからの相対pathで、bundle内の他のimportは相対pathなのでそのまま解決されます。
+
+```html
+<script type="importmap">
+{
+    "imports": {
+        "@trust-medical/feedback-reporter": "./node_modules/@trust-medical/feedback-reporter/dist/index.js",
+        "@trust-medical/feedback-reporter/widget": "./node_modules/@trust-medical/feedback-reporter/dist/widget.js",
+        "konva": "./node_modules/konva/lib/index.js"
+    }
+}
+</script>
+<script type="module">
+    import { registerFeedbackReporterElement } from '@trust-medical/feedback-reporter/widget'
+
+    registerFeedbackReporterElement()
+</script>
+```
+
+headless entry（`index.js`）は外部importを持たないため、自身のmappingだけで動作します。`konva` のmappingが必要なのはWidgetだけです。
+
+### sessionを持たないページ向けのLaravel設定
+
+Laravelが描画しないページには、session、CSRF token、ログイン済みuserがありません。既定値のままでは、送信は `419` で拒否され、利用可否確認は `{"available": false}` を返します。このようなページでは、guestを許可し、sessionの開始とCSRF token検証のどちらも行わないroute middleware groupを使います。
+
+```php
+// config/feedback-reporter.php
+'availability' => [
+    'environments' => ['local', 'staging'],
+    'require_authentication' => false,
+    // ...
+],
+
+'route' => [
+    'middleware' => ['api'],
+    // ...
+],
+```
+
+`availability.environments` は、運用上可能な範囲で限定したままにしてください。
+
+### 別originのページから使う
+
+ページがLaravel applicationと別originで配信される場合は、WidgetとSDKの `endpoint` と `availability-endpoint` に絶対URLを指定し、CORSでページのoriginを許可します。`php artisan config:publish cors` で設定を公開し、次のように設定します。
+
+```php
+// config/cors.php
+'paths' => ['feedback-reporter/*'],
+'allowed_origins' => ['https://static.example.test'],
+'allowed_headers' => ['*'],
+'supports_credentials' => false,
+```
+
+SDKは `credentials: 'same-origin'` でrequestするため、originをまたぐとCookieは送信されません。そのため、別originのページではsession、CSRF token、認証に基づく利用可否判定は使えません。`X-Requested-With` などのcustom headerはCORSのpreflight requestを発生させます。
+
+### 匿名で使えるendpointを保護する
+
+session、CSRF token検証、認証がない場合、組み込みの保護はIPごとのrate limit、環境とIPの利用可否ルール、request validationです。このようなendpointをインターネットへ公開する前に、`availability.allowed_ips` や `FeedbackAvailability` policyを検討してください。reporterに設定したcustom `headers` は利用可否確認と送信の両方に付与されるため、policyでページが付与するheaderを要求できます。
+
+```php
+use Illuminate\Http\Request;
+use TrustMedical\FeedbackReporter\Contracts\FeedbackAvailability;
+
+final class StaticPageAvailability implements FeedbackAvailability
+{
+    public function isAvailable(Request $request): bool
+    {
+        $token = (string) config('services.feedback.token');
+
+        return $token !== '' && hash_equals($token, (string) $request->header('X-Feedback-Token'));
+    }
+}
+```
+
+```ts
+widget.config = {
+    endpoint: 'https://app.example.test/feedback-reporter/reports',
+    availabilityEndpoint: 'https://app.example.test/feedback-reporter/availability',
+    reporter: { headers: { 'X-Feedback-Token': 'value-from-your-page' } },
+}
+```
+
+このclassは `availability.policy` に登録します。公開ページに埋め込んだ値は秘密ではありません。意図しない送信や自動化されたnoiseは減らせますが、悪意のあるclientは止められないため、rate limitと保持期間の設定は維持してください。
 
 ## 診断コンテキストとプライバシー
 

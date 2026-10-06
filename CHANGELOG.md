@@ -2,6 +2,16 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## Unreleased
+
+### Added
+- README section "Using the frontend without Laravel views": loading the Widget without a bundler (import map), the Laravel configuration for pages without a session (`availability.require_authentication`, `route.middleware`), CORS for pages on another origin, and protecting an anonymous endpoint.
+- Tests that pin the defaults for Laravel-rendered pages (`web` middleware, session CSRF token, authentication required) and that the routes work for guests under the `api` middleware group.
+
+### Changed
+- The `headers` reporter option is now also sent with availability checks, not only with submissions, so a `FeedbackAvailability` policy can rely on a header supplied by the frontend.
+- The default `SessionExpiredError` message now points to the CSRF settings of the reporter routes for pages that Laravel does not render.
+
 ## 4.4.0 - 2026-09-28
 
 ### Added

@@ -28,6 +28,24 @@ export function getCsrfToken(config?: FeedbackReporterConfig): string | null {
   return null
 }
 
+/**
+ * Merge the configured custom headers over the base headers. A plain object or no value
+ * is merged synchronously so that requests start without waiting a tick; only a headers
+ * function that returns a promise has to be awaited.
+ */
+function withCustomHeaders(
+  base: Record<string, string>,
+  config?: FeedbackReporterConfig,
+): Record<string, string> | Promise<Record<string, string>> {
+  const custom = typeof config?.headers === 'function' ? config.headers() : config?.headers
+
+  if (custom instanceof Promise) {
+    return custom.then((resolved) => ({ ...base, ...resolved }))
+  }
+
+  return { ...base, ...custom }
+}
+
 interface TimedSignal {
   signal: AbortSignal
   timedOut: () => boolean
@@ -117,18 +135,13 @@ export async function fetchAvailability(
 ): Promise<FeedbackAvailability> {
   const url = config?.availabilityEndpoint || '/feedback-reporter/availability'
 
-  const res = await request(
-    url,
-    {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'X-Requested-With': 'XMLHttpRequest',
-      },
-    },
+  const merged = withCustomHeaders(
+    { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
     config,
-    signal,
   )
+  const headers = merged instanceof Promise ? await merged : merged
+
+  const res = await request(url, { method: 'GET', headers }, config, signal)
 
   if (res.status === 429) {
     throw new RateLimitError('Too many availability checks. Please wait before retrying.')
@@ -176,21 +189,18 @@ export async function sendFeedbackReport(
 ): Promise<FeedbackSubmitResponse> {
   const url = config?.endpoint || '/feedback-reporter/reports'
 
-  const headers: Record<string, string> = {
+  const baseHeaders: Record<string, string> = {
     Accept: 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
   }
 
   const csrf = getCsrfToken(config)
   if (csrf) {
-    headers['X-CSRF-TOKEN'] = csrf
+    baseHeaders['X-CSRF-TOKEN'] = csrf
   }
 
-  if (config?.headers) {
-    const customHeaders =
-      typeof config.headers === 'function' ? await config.headers() : config.headers
-    Object.assign(headers, customHeaders)
-  }
+  const merged = withCustomHeaders(baseHeaders, config)
+  const headers = merged instanceof Promise ? await merged : merged
 
   // Do NOT set Content-Type header manually for FormData; browser sets boundary automatically
 

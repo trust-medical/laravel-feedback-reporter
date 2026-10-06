@@ -51,7 +51,7 @@ var ServerError = class extends TransportError {
   }
 };
 var SessionExpiredError = class extends TransportError {
-  constructor(message = "The session or CSRF token has expired. Reload the page and try again.", statusCode = 419) {
+  constructor(message = "The session or CSRF token is missing or has expired. Reload the page and try again. If the page is not served by Laravel, check the CSRF settings of the reporter routes.", statusCode = 419) {
     super(message, statusCode);
     this.name = "SessionExpiredError";
   }
@@ -923,6 +923,13 @@ function getCsrfToken(config) {
   }
   return null;
 }
+function withCustomHeaders(base, config) {
+  const custom = typeof config?.headers === "function" ? config.headers() : config?.headers;
+  if (custom instanceof Promise) {
+    return custom.then((resolved) => ({ ...base, ...resolved }));
+  }
+  return { ...base, ...custom };
+}
 function withTimeout(signal, timeoutMs) {
   const controller = new AbortController();
   let didTimeOut = false;
@@ -979,18 +986,12 @@ async function request(url, init, config, signal) {
 }
 async function fetchAvailability(config, signal) {
   const url = config?.availabilityEndpoint || "/feedback-reporter/availability";
-  const res = await request(
-    url,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "X-Requested-With": "XMLHttpRequest"
-      }
-    },
-    config,
-    signal
+  const merged = withCustomHeaders(
+    { Accept: "application/json", "X-Requested-With": "XMLHttpRequest" },
+    config
   );
+  const headers = merged instanceof Promise ? await merged : merged;
+  const res = await request(url, { method: "GET", headers }, config, signal);
   if (res.status === 429) {
     throw new RateLimitError("Too many availability checks. Please wait before retrying.");
   }
@@ -1018,18 +1019,16 @@ async function checkAvailability(config, signal) {
 }
 async function sendFeedbackReport(formData, config, signal) {
   const url = config?.endpoint || "/feedback-reporter/reports";
-  const headers = {
+  const baseHeaders = {
     Accept: "application/json",
     "X-Requested-With": "XMLHttpRequest"
   };
   const csrf = getCsrfToken(config);
   if (csrf) {
-    headers["X-CSRF-TOKEN"] = csrf;
+    baseHeaders["X-CSRF-TOKEN"] = csrf;
   }
-  if (config?.headers) {
-    const customHeaders = typeof config.headers === "function" ? await config.headers() : config.headers;
-    Object.assign(headers, customHeaders);
-  }
+  const merged = withCustomHeaders(baseHeaders, config);
+  const headers = merged instanceof Promise ? await merged : merged;
   const res = await request(url, { method: "POST", headers, body: formData }, config, signal);
   let responseBody = null;
   let isJson = true;
@@ -1264,5 +1263,5 @@ function createFeedbackReporter(config) {
 }
 
 export { AttachmentValidationError, AvailabilityError, DEFAULT_LIMITS, DEFAULT_TIMEOUT_MS, FeedbackReporter, FeedbackReporterError, PayloadTooLargeError, RateLimitError, ServerError, SessionExpiredError, TimeoutError, TransportError, ValidationError, breadcrumbsCollector, checkAvailability, collectDiagnosticContext, consoleCollector, createFeedbackReporter, createId, errorCollector, fetchAvailability, getCsrfToken, getNormalizedPerformance, networkErrorCollector, prepareAttachments, resolveLimits, safeStringify, sanitizeUrl, sanitizeUrlsInText, sendFeedbackReport, truncateString };
-//# sourceMappingURL=chunk-OZ33U26D.js.map
-//# sourceMappingURL=chunk-OZ33U26D.js.map
+//# sourceMappingURL=chunk-5MDB3WD3.js.map
+//# sourceMappingURL=chunk-5MDB3WD3.js.map

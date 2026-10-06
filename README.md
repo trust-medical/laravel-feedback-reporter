@@ -86,7 +86,7 @@ npm install github:trust-medical/laravel-feedback-reporter#v4.4.0
 
 The package keeps its `@trust-medical/feedback-reporter` import name. npm pins the Git tag instead of a semver range, so change the tag explicitly when upgrading.
 
-Layouts that submit from the frontend must provide Laravel's CSRF token:
+Layouts that submit from the frontend must provide Laravel's CSRF token. Pages that Laravel does not render, such as a static HTML page, are covered in [Using the frontend without Laravel views](#using-the-frontend-without-laravel-views).
 
 ```blade
 <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -194,10 +194,10 @@ Registration is explicit and idempotent. A custom element name can be registered
 
 | Attribute | Default | Description |
 | --- | --- | --- |
-| `endpoint` | `/feedback-reporter/reports` | Report submission URL |
-| `availability-endpoint` | `/feedback-reporter/availability` | Availability check URL |
+| `endpoint` | `/feedback-reporter/reports` | Report submission URL. Use an absolute URL when the page is served from another origin |
+| `availability-endpoint` | `/feedback-reporter/availability` | Availability check URL. Use an absolute URL when the page is served from another origin |
 | `source-type` | `web_site` | Application-defined source value stored in report metadata |
-| `route-name` | none | Current application route stored in report metadata |
+| `route-name` | none | Current application route stored in report metadata. Optional; omit it on pages that Laravel does not render |
 | `panel-id` | none | Optional administration panel identifier |
 | `lang` | document language | Japanese when the language starts with `ja`; English otherwise |
 | `color-scheme` | `auto` | `auto`, `light`, or `dark` |
@@ -317,7 +317,7 @@ Before uploading, the SDK checks attachment count, per-file size, total size, an
 
 `SessionExpiredError`, `PayloadTooLargeError`, and `TimeoutError` extend `TransportError`. A `200` response with `duplicate: true` is a success.
 
-Configuration supports custom CSRF resolution, synchronous or asynchronous headers, URL sanitization, storage-key allowlists, synchronous or asynchronous metadata, diagnostics, and lifecycle callbacks. The SDK reads Laravel's `meta[name="csrf-token"]` by default. Do not set a multipart `Content-Type` header manually; the browser adds the required `FormData` boundary.
+Configuration supports custom CSRF resolution, synchronous or asynchronous headers (sent with both availability checks and submissions), URL sanitization, storage-key allowlists, synchronous or asynchronous metadata, diagnostics, and lifecycle callbacks. The SDK reads Laravel's `meta[name="csrf-token"]` by default. Do not set a multipart `Content-Type` header manually; the browser adds the required `FormData` boundary.
 
 ### Alpine adapter
 
@@ -333,6 +333,96 @@ Alpine.data('feedbackReporter', () =>
 ```
 
 The adapter exposes message, attachments, availability, submission state, the latest response, `lastError`, per-field `fieldErrors`, attachment helpers, and `submit()`. `available` is `null` until `init()` finishes the availability check. `submit()` records failures in the state instead of rethrowing, and keeps the same `clientReportId` for retries until a submission succeeds. Call `markEdited()` when the user changes the draft to clear the previous success state, and `destroy()` when the component is removed. `addAttachment()` defaults to the `attachment` source.
+
+## Using the frontend without Laravel views
+
+The Widget and the headless SDK are plain ES modules with no Laravel, Blade, or Vite dependency, so they can run on a static HTML page. The ingestion routes still have to be served by a Laravel application that has this package installed. Pages rendered by Laravel are unaffected: the defaults (`web` middleware, CSRF token from the layout, authenticated users only) do not change, and the settings below are only for pages that have no Laravel session.
+
+### Loading without a bundler
+
+`widget.js` imports `konva` as a bare module specifier, which a browser cannot resolve on its own. Without a bundler, map it with an import map. Paths are relative to the page, and the other imports of the bundle are relative, so they resolve as they are:
+
+```html
+<script type="importmap">
+{
+    "imports": {
+        "@trust-medical/feedback-reporter": "./node_modules/@trust-medical/feedback-reporter/dist/index.js",
+        "@trust-medical/feedback-reporter/widget": "./node_modules/@trust-medical/feedback-reporter/dist/widget.js",
+        "konva": "./node_modules/konva/lib/index.js"
+    }
+}
+</script>
+<script type="module">
+    import { registerFeedbackReporterElement } from '@trust-medical/feedback-reporter/widget'
+
+    registerFeedbackReporterElement()
+</script>
+```
+
+The headless entry (`index.js`) has no external imports, so it needs only its own mapping. The `konva` mapping is needed only for the Widget.
+
+### Laravel configuration for pages without a session
+
+A page that Laravel does not render has no session, no CSRF token, and no logged-in user. With the defaults, a submission is rejected with `419` and the availability check returns `{"available": false}`. For such pages, allow guests and use a route middleware group that neither starts a session nor verifies CSRF tokens:
+
+```php
+// config/feedback-reporter.php
+'availability' => [
+    'environments' => ['local', 'staging'],
+    'require_authentication' => false,
+    // ...
+],
+
+'route' => [
+    'middleware' => ['api'],
+    // ...
+],
+```
+
+Keep `availability.environments` as restrictive as the deployment allows.
+
+### Pages on another origin
+
+When the page is served from a different origin than the Laravel application, give the Widget and the SDK absolute `endpoint` and `availability-endpoint` URLs, and allow the page's origin in CORS. Publish the configuration with `php artisan config:publish cors`, then:
+
+```php
+// config/cors.php
+'paths' => ['feedback-reporter/*'],
+'allowed_origins' => ['https://static.example.test'],
+'allowed_headers' => ['*'],
+'supports_credentials' => false,
+```
+
+The SDK requests with `credentials: 'same-origin'`, so cookies are not sent across origins. Sessions, CSRF tokens, and authentication-based availability are therefore not available to a page on another origin. Custom headers such as `X-Requested-With` trigger a CORS preflight request.
+
+### Protecting an anonymous endpoint
+
+Without a session, CSRF verification, or authentication, the built-in protections are the per-IP rate limit, the environment and IP availability rules, and request validation. Before exposing such an endpoint to the public internet, consider `availability.allowed_ips` or a `FeedbackAvailability` policy. Custom `headers` set on the reporter are sent with both availability checks and submissions, so a policy can require a header the page supplies:
+
+```php
+use Illuminate\Http\Request;
+use TrustMedical\FeedbackReporter\Contracts\FeedbackAvailability;
+
+final class StaticPageAvailability implements FeedbackAvailability
+{
+    public function isAvailable(Request $request): bool
+    {
+        $token = (string) config('services.feedback.token');
+
+        return $token !== '' && hash_equals($token, (string) $request->header('X-Feedback-Token'));
+    }
+}
+```
+
+```ts
+widget.config = {
+    endpoint: 'https://app.example.test/feedback-reporter/reports',
+    availabilityEndpoint: 'https://app.example.test/feedback-reporter/availability',
+    reporter: { headers: { 'X-Feedback-Token': 'value-from-your-page' } },
+}
+```
+
+Register the class in `availability.policy`. A value embedded in a public page is not a secret: this reduces accidental and automated noise but does not stop a determined client, so keep the rate limit and retention settings in place.
 
 ## Diagnostic context and privacy
 

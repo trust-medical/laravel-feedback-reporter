@@ -1,4 +1,4 @@
-import { DEFAULT_LIMITS, resolveLimits, createFeedbackReporter, createId, AvailabilityError } from './chunk-OZ33U26D.js';
+import { DEFAULT_LIMITS, resolveLimits, createFeedbackReporter, createId, AvailabilityError } from './chunk-5MDB3WD3.js';
 import Konva from 'konva';
 
 // resources/js/widget-styles.ts

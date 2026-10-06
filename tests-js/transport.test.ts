@@ -50,6 +50,27 @@ describe('transport', () => {
     })
   })
 
+  it('sends custom headers with availability checks and submissions', async () => {
+    const fetchMock = vi
+      .spyOn(window, 'fetch')
+      .mockResolvedValueOnce(json({ available: true }, 200))
+      .mockResolvedValueOnce(json({ available: true }, 200))
+      .mockResolvedValueOnce(json({ id: 'a', success: true }, 201))
+
+    await fetchAvailability({ headers: { 'X-Feedback-Token': 'static' } })
+    await fetchAvailability({ headers: async () => ({ 'X-Feedback-Token': 'dynamic' }) })
+    await sendFeedbackReport(new FormData(), { headers: { 'X-Feedback-Token': 'static' } })
+
+    const sent = fetchMock.mock.calls.map((call) => (call[1] as RequestInit).headers)
+    expect(sent[0]).toMatchObject({
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      'X-Feedback-Token': 'static',
+    })
+    expect(sent[1]).toMatchObject({ 'X-Feedback-Token': 'dynamic' })
+    expect(sent[2]).toMatchObject({ 'X-Feedback-Token': 'static' })
+  })
+
   it('rejects a successful status with a non-JSON body', async () => {
     vi.spyOn(window, 'fetch').mockResolvedValueOnce(new Response('<html>', { status: 201 }))
 
