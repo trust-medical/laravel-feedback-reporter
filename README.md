@@ -4,7 +4,8 @@
 
 A feedback reporting package for Laravel 12 and 13. It combines a secure Laravel ingestion endpoint with a TypeScript SDK and an optional, isolated Web Component for submitting messages, manually captured screenshots, image annotations, and diagnostic context.
 
-[![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
+[![PHP Tests](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/php-tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/php-tests.yml)
+[![Frontend Tests](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/frontend-tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/frontend-tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
 ## Overview

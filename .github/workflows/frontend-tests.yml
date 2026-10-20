@@ -1,0 +1,70 @@
+name: Frontend Tests
+
+# main only accepts changes through pull requests, so there is no push trigger:
+# the pull request run covers the change and the weekly run covers main.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'resources/js/**'
+      - 'tests-js/**'
+      - 'dist/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'biome.json'
+      - 'tsconfig.json'
+      - 'tsdown.config.ts'
+      - 'vitest.config.ts'
+      - '.github/workflows/frontend-tests.yml'
+  schedule:
+    # Weekly run so new advisories are caught between changes.
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-tests:
+    name: Frontend - Node ${{ matrix.node }} (TypeScript, Vitest, Build)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v4.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+
+      - name: Lint with Biome
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run Vitest
+        run: npm test
+
+      - name: Build bundle
+        run: npm run build
+
+      - name: Ensure committed dist is up to date
+        if: matrix.node == 22
+        run: git diff --exit-code --stat -- dist
