@@ -46,10 +46,10 @@
     "./dist/widget.js"
   ],
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -64,7 +64,7 @@
     "@biomejs/biome": "^2.5.15",
     "@types/node": "^26.6.5",
     "happy-dom": "^21.0.3",
-    "tsup": "^8.3.5",
+    "tsdown": "^0.23.1",
     "typescript": "^5.7.2",
     "vitest": "^5.0.5"
   },

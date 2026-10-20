@@ -1,4 +1,4 @@
-import { defineConfig } from 'tsup'
+import { defineConfig } from 'tsdown'
 
 export default defineConfig({
   entry: {
@@ -6,12 +6,11 @@ export default defineConfig({
     alpine: 'resources/js/alpine.ts',
     widget: 'resources/js/widget.ts',
   },
-  format: ['esm'],
-  dts: true,
+  format: 'esm',
+  platform: 'browser',
+  target: 'es2022',
+  dts: { sourcemap: false },
   clean: true,
   sourcemap: true,
   minify: false,
-  treeshake: true,
-  target: 'es2022',
-  external: ['alpinejs'],
 })
