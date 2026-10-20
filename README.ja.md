@@ -4,7 +4,8 @@
 
 Laravel 12・13向けのフィードバック報告パッケージです。安全なLaravel受信エンドポイント、TypeScript SDK、任意導入の隔離されたWeb Componentを組み合わせ、メッセージ、手動撮影したスクリーンショット、画像注釈、診断コンテキストを送信できます。
 
-[![Tests & Code Quality](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/tests.yml)
+[![PHP Tests](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/php-tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/php-tests.yml)
+[![Frontend Tests](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/frontend-tests.yml/badge.svg)](https://github.com/trust-medical/laravel-feedback-reporter/actions/workflows/frontend-tests.yml)
 [![Software License](https://img.shields.io/badge/license-MIT-brightgreen.svg)](LICENSE)
 
 ## 概要
