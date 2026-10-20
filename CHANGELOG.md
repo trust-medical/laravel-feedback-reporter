@@ -2,6 +2,11 @@
 
 All notable changes to `laravel-feedback-reporter` will be documented in this file.
 
+## Unreleased
+
+### Changed
+- The frontend bundles in `dist/` are built with tsdown (Rolldown) instead of tsup. The entry points and exports are unchanged; only the names of the shared chunk files in `dist/` differ. Building now requires Node.js 22.18 or later.
+
 ## 4.4.1 - 2026-10-06
 
 ### Added
