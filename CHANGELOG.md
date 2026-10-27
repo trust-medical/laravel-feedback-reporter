@@ -6,6 +6,7 @@ All notable changes to `laravel-feedback-reporter` will be documented in this fi
 
 ### Changed
 - The frontend bundles in `dist/` are built with tsdown (Rolldown) instead of tsup. The entry points and exports are unchanged; only the names of the shared chunk files in `dist/` differ. Building now requires Node.js 22.18 or later.
+- Removed the `package.json` overrides that held the development-only dependencies `vite`, `@vitest/mocker` and `esbuild` at older versions, so Vitest resolves the versions it requires (Vite 8.3.5, `@vitest/mocker` 5.0.5) and `npm audit` passes (GHSA-9jrq-w75r-8gcw, GHSA-rq7h-c2jc-7f22, GHSA-qxg6-89mg-rqv8). They are not part of the distributed `dist/`.
 
 ## 4.4.1 - 2026-10-06
 

@@ -1,6 +1,5 @@
-import { l as FeedbackReporterConfig, r as FeedbackAttachmentInput, u as FeedbackSubmitResponse } from "./types-Bv_lx0RT.js";
-import { t as FeedbackReporter } from "./reporter-CJ6ZYdDu.js";
-//#region resources/js/alpine.d.ts
+import { l as FeedbackReporterConfig, r as FeedbackAttachmentInput, u as FeedbackSubmitResponse } from "./types-CEHkQOCM.js";
+import { t as FeedbackReporter } from "./reporter-ClGSaAUt.js";
 export declare function createAlpineFeedbackReporter(config?: FeedbackReporterConfig): {
   reporter: FeedbackReporter;
   message: string;
@@ -30,5 +29,4 @@ export declare function createAlpineFeedbackReporter(config?: FeedbackReporterCo
    */
   submit(): Promise<FeedbackSubmitResponse | null>;
 };
-//#endregion
 //# sourceMappingURL=alpine.d.ts.map

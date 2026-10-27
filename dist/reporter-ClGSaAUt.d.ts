@@ -1,5 +1,4 @@
-import { i as FeedbackAvailability, l as FeedbackReporterConfig, o as FeedbackLimits, s as FeedbackReportOptions, t as DiagnosticContext, u as FeedbackSubmitResponse } from "./types-Bv_lx0RT.js";
-//#region resources/js/reporter.d.ts
+import { i as FeedbackAvailability, l as FeedbackReporterConfig, o as FeedbackLimits, s as FeedbackReportOptions, t as DiagnosticContext, u as FeedbackSubmitResponse } from "./types-CEHkQOCM.js";
 declare class FeedbackReporter {
   private readonly config;
   private readonly activeDiagnostics;
@@ -29,6 +28,5 @@ declare class FeedbackReporter {
   private encodeMetadata;
 }
 declare function createFeedbackReporter(config?: FeedbackReporterConfig): FeedbackReporter;
-//#endregion
 export { createFeedbackReporter as n, FeedbackReporter as t };
-//# sourceMappingURL=reporter-CJ6ZYdDu.d.ts.map
+//# sourceMappingURL=reporter-ClGSaAUt.d.ts.map

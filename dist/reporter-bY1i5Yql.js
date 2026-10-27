@@ -1,4 +1,4 @@
-//#region resources/js/errors.ts
+// resources/js/errors.ts
 var FeedbackReporterError = class extends Error {
 	constructor(message) {
 		super(message);
@@ -71,8 +71,7 @@ var TimeoutError = class extends TransportError {
 	}
 };
 
-//#endregion
-//#region resources/js/limits.ts
+// resources/js/limits.ts
 const DEFAULT_LIMITS = Object.freeze({
 	maxFiles: 5,
 	maxFileSizeKb: 5120,
@@ -119,8 +118,7 @@ function resolveLimits(limits) {
 	return resolved;
 }
 
-//#endregion
-//#region resources/js/attachments.ts
+// resources/js/attachments.ts
 function formatMegabytes(bytes) {
 	const megabytes = bytes / 1024 / 1024;
 	return Number.isInteger(megabytes) ? String(megabytes) : megabytes.toFixed(1);
@@ -169,8 +167,7 @@ function prepareAttachments(rawAttachments, limitsOrMaxFiles, legacyMaxFileSize)
 	return prepared;
 }
 
-//#endregion
-//#region resources/js/sanitizer.ts
+// resources/js/sanitizer.ts
 function sanitizeUrl(rawUrl, options) {
 	try {
 		const parsed = new URL(rawUrl, window.location.origin);
@@ -259,8 +256,7 @@ function safeStringify(value, maxLength = 500) {
 	}
 }
 
-//#endregion
-//#region resources/js/diagnostics/buffer.ts
+// resources/js/diagnostics/buffer.ts
 /**
 * Coerce a configured ring-buffer size into a safe positive integer.
 * NaN, negative, zero, and non-numeric values fall back to the default.
@@ -269,8 +265,7 @@ function normalizeMaxEntries(value, fallback) {
 	return typeof value === "number" && Number.isFinite(value) && value >= 1 ? Math.min(Math.floor(value), 500) : fallback;
 }
 
-//#endregion
-//#region resources/js/diagnostics/breadcrumbs.ts
+// resources/js/diagnostics/breadcrumbs.ts
 var BreadcrumbsCollector = class {
 	buffer = [];
 	maxEntries = 50;
@@ -361,8 +356,7 @@ var BreadcrumbsCollector = class {
 };
 const breadcrumbsCollector = new BreadcrumbsCollector();
 
-//#endregion
-//#region resources/js/diagnostics/console.ts
+// resources/js/diagnostics/console.ts
 const MAX_ARGUMENTS = 10;
 const MAX_ARGUMENT_LENGTH = 500;
 var ConsoleCollector = class {
@@ -447,8 +441,7 @@ var ConsoleCollector = class {
 };
 const consoleCollector = new ConsoleCollector();
 
-//#endregion
-//#region resources/js/diagnostics/errors.ts
+// resources/js/diagnostics/errors.ts
 var ErrorCollector = class {
 	buffer = [];
 	maxEntries = 20;
@@ -517,8 +510,7 @@ var ErrorCollector = class {
 };
 const errorCollector = new ErrorCollector();
 
-//#endregion
-//#region resources/js/diagnostics/network.ts
+// resources/js/diagnostics/network.ts
 var NetworkErrorCollector = class {
 	buffer = [];
 	maxEntries = 20;
@@ -647,8 +639,7 @@ var NetworkErrorCollector = class {
 };
 const networkErrorCollector = new NetworkErrorCollector();
 
-//#endregion
-//#region resources/js/diagnostics/performance.ts
+// resources/js/diagnostics/performance.ts
 function getNormalizedPerformance() {
 	if (typeof window === "undefined" || typeof performance === "undefined") return null;
 	try {
@@ -685,8 +676,7 @@ function getNormalizedPerformance() {
 	}
 }
 
-//#endregion
-//#region resources/js/context.ts
+// resources/js/context.ts
 const MAX_STORAGE_VALUE_LENGTH = 1024;
 function readStorage(storage, key) {
 	try {
@@ -796,8 +786,7 @@ async function collectDiagnosticContext(config) {
 	return context;
 }
 
-//#endregion
-//#region resources/js/id.ts
+// resources/js/id.ts
 /**
 * Generate a random identifier that matches the server's client_report_id
 * format (`^[A-Za-z0-9_-]{8,64}$`).
@@ -818,8 +807,7 @@ function createId() {
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-//#endregion
-//#region resources/js/transport.ts
+// resources/js/transport.ts
 const DEFAULT_TIMEOUT_MS = 6e4;
 function getCsrfToken(config) {
 	if (config?.csrfToken) return typeof config.csrfToken === "function" ? config.csrfToken() : config.csrfToken;
@@ -969,8 +957,7 @@ async function sendFeedbackReport(formData, config, signal) {
 	throw new TransportError(`Unexpected response status code: ${res.status}`, res.status, responseBody);
 }
 
-//#endregion
-//#region resources/js/reporter.ts
+// resources/js/reporter.ts
 const MAX_PAGE_TITLE_LENGTH = 255;
 const MAX_PAGE_URL_LENGTH = 2048;
 function jsonDepth(value, depth = 0) {
@@ -1125,6 +1112,5 @@ function createFeedbackReporter(config) {
 	return new FeedbackReporter(config);
 }
 
-//#endregion
 export { TransportError as A, AvailabilityError as C, ServerError as D, RateLimitError as E, SessionExpiredError as O, AttachmentValidationError as S, PayloadTooLargeError as T, sanitizeUrlsInText as _, fetchAvailability as a, DEFAULT_LIMITS as b, createId as c, networkErrorCollector as d, errorCollector as f, sanitizeUrl as g, safeStringify as h, checkAvailability as i, ValidationError as j, TimeoutError as k, collectDiagnosticContext as l, breadcrumbsCollector as m, createFeedbackReporter as n, getCsrfToken as o, consoleCollector as p, DEFAULT_TIMEOUT_MS as r, sendFeedbackReport as s, FeedbackReporter as t, getNormalizedPerformance as u, truncateString as v, FeedbackReporterError as w, resolveLimits as x, prepareAttachments as y };
-//# sourceMappingURL=reporter-C-zwQXFf.js.map
+//# sourceMappingURL=reporter-bY1i5Yql.js.map

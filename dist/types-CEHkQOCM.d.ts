@@ -1,4 +1,3 @@
-//#region resources/js/types.d.ts
 type FeedbackImageSource = 'user_screenshot' | 'attachment';
 interface FeedbackAttachmentInput {
   file: File | Blob;
@@ -103,6 +102,5 @@ interface DiagnosticContext {
   breadcrumbs?: unknown[];
   application?: Record<string, unknown>;
 }
-//#endregion
 export { FeedbackImageSource as a, FeedbackReporterCallbacks as c, StorageOptions as d, UrlSanitizationOptions as f, FeedbackAvailability as i, FeedbackReporterConfig as l, DiagnosticsOptions as n, FeedbackLimits as o, FeedbackAttachmentInput as r, FeedbackReportOptions as s, DiagnosticContext as t, FeedbackSubmitResponse as u };
-//# sourceMappingURL=types-Bv_lx0RT.d.ts.map
+//# sourceMappingURL=types-CEHkQOCM.d.ts.map

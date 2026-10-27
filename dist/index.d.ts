@@ -1,6 +1,5 @@
-import { a as FeedbackImageSource, c as FeedbackReporterCallbacks, d as StorageOptions, f as UrlSanitizationOptions, i as FeedbackAvailability, l as FeedbackReporterConfig, n as DiagnosticsOptions, o as FeedbackLimits, r as FeedbackAttachmentInput, s as FeedbackReportOptions, t as DiagnosticContext, u as FeedbackSubmitResponse } from "./types-Bv_lx0RT.js";
-import { n as createFeedbackReporter, t as FeedbackReporter } from "./reporter-CJ6ZYdDu.js";
-//#region resources/js/attachments.d.ts
+import { a as FeedbackImageSource, c as FeedbackReporterCallbacks, d as StorageOptions, f as UrlSanitizationOptions, i as FeedbackAvailability, l as FeedbackReporterConfig, n as DiagnosticsOptions, o as FeedbackLimits, r as FeedbackAttachmentInput, s as FeedbackReportOptions, t as DiagnosticContext, u as FeedbackSubmitResponse } from "./types-CEHkQOCM.js";
+import { n as createFeedbackReporter, t as FeedbackReporter } from "./reporter-ClGSaAUt.js";
 interface PreparedAttachment {
   file: File | Blob;
   source: string;
@@ -15,11 +14,7 @@ type AttachmentLimits = Pick<FeedbackLimits, 'maxFiles' | 'maxFileSizeKb' | 'max
  * is still accepted.
  */
 export declare function prepareAttachments(rawAttachments?: FeedbackAttachmentInput[], limitsOrMaxFiles?: Partial<AttachmentLimits> | number, legacyMaxFileSize?: number): PreparedAttachment[];
-//#endregion
-//#region resources/js/context.d.ts
 export declare function collectDiagnosticContext(config?: FeedbackReporterConfig): Promise<DiagnosticContext>;
-//#endregion
-//#region resources/js/diagnostics/breadcrumbs.d.ts
 interface BreadcrumbItem {
   category: 'click' | 'navigation' | 'submit';
   message: string;
@@ -41,8 +36,6 @@ declare class BreadcrumbsCollector {
   destroy(): void;
 }
 export declare const breadcrumbsCollector: BreadcrumbsCollector;
-//#endregion
-//#region resources/js/diagnostics/console.d.ts
 interface CapturedConsoleItem {
   level: 'error' | 'warn';
   messages: string[];
@@ -71,8 +64,6 @@ declare class ConsoleCollector {
   destroy(): void;
 }
 export declare const consoleCollector: ConsoleCollector;
-//#endregion
-//#region resources/js/diagnostics/errors.d.ts
 interface CapturedErrorItem {
   type: 'error' | 'unhandledrejection';
   message: string;
@@ -96,8 +87,6 @@ declare class ErrorCollector {
   destroy(): void;
 }
 export declare const errorCollector: ErrorCollector;
-//#endregion
-//#region resources/js/diagnostics/network.d.ts
 interface CapturedNetworkErrorItem {
   method: string;
   url: string;
@@ -130,11 +119,7 @@ declare class NetworkErrorCollector {
   destroy(): void;
 }
 export declare const networkErrorCollector: NetworkErrorCollector;
-//#endregion
-//#region resources/js/diagnostics/performance.d.ts
 export declare function getNormalizedPerformance(): Record<string, unknown> | null;
-//#endregion
-//#region resources/js/errors.d.ts
 export declare class FeedbackReporterError extends Error {
   constructor(message: string);
 }
@@ -170,8 +155,6 @@ export declare class TimeoutError extends TransportError {
   readonly timeoutMs: number;
   constructor(timeoutMs: number);
 }
-//#endregion
-//#region resources/js/id.d.ts
 /**
  * Generate a random identifier that matches the server's client_report_id
  * format (`^[A-Za-z0-9_-]{8,64}$`).
@@ -181,11 +164,7 @@ export declare class TimeoutError extends TransportError {
  * `crypto.getRandomValues` or, as a last resort, `Math.random`.
  */
 export declare function createId(): string;
-//#endregion
-//#region resources/js/limits.d.ts
 export declare const DEFAULT_LIMITS: Readonly<FeedbackLimits>;
-//#endregion
-//#region resources/js/sanitizer.d.ts
 export declare function sanitizeUrl(rawUrl: string, options?: UrlSanitizationOptions): string;
 export declare function truncateString(val: string, maxLength?: number): string;
 /**
@@ -198,8 +177,6 @@ export declare function sanitizeUrlsInText(text: string, options?: UrlSanitizati
  * Depth, key count, array length, and total output length are all capped.
  */
 export declare function safeStringify(value: unknown, maxLength?: number): string;
-//#endregion
-//#region resources/js/transport.d.ts
 export declare const DEFAULT_TIMEOUT_MS = 60000;
 export declare function getCsrfToken(config?: FeedbackReporterConfig): string | null;
 /**
@@ -214,6 +191,5 @@ export declare function fetchAvailability(config?: FeedbackReporterConfig, signa
  */
 export declare function checkAvailability(config?: FeedbackReporterConfig, signal?: AbortSignal): Promise<boolean>;
 export declare function sendFeedbackReport(formData: FormData, config?: FeedbackReporterConfig, signal?: AbortSignal): Promise<FeedbackSubmitResponse>;
-//#endregion
 export { type AttachmentLimits, type DiagnosticContext, type DiagnosticsOptions, type FeedbackAttachmentInput, type FeedbackAvailability, type FeedbackImageSource, type FeedbackLimits, type FeedbackReportOptions, FeedbackReporter, type FeedbackReporterCallbacks, type FeedbackReporterConfig, type FeedbackSubmitResponse, type PreparedAttachment, type StorageOptions, type UrlSanitizationOptions, createFeedbackReporter };
 //# sourceMappingURL=index.d.ts.map
