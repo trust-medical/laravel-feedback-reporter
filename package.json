@@ -68,11 +68,6 @@
     "typescript": "^5.7.2",
     "vitest": "^5.0.5"
   },
-  "overrides": {
-    "esbuild": "^0.28.2",
-    "vite": "^6.4.3",
-    "@vitest/mocker": "^4.1.11"
-  },
   "peerDependencies": {
     "alpinejs": "^3.0.0"
   },
