@@ -1,7 +1,7 @@
-import { C as AvailabilityError, b as DEFAULT_LIMITS, c as createId, n as createFeedbackReporter, x as resolveLimits } from "./reporter-C-zwQXFf.js";
+import { C as AvailabilityError, b as DEFAULT_LIMITS, c as createId, n as createFeedbackReporter, x as resolveLimits } from "./reporter-bY1i5Yql.js";
 import Konva from "konva";
 
-//#region resources/js/widget-styles.ts
+// resources/js/widget-styles.ts
 const widgetStyles = `
     :host {
         all: initial;
@@ -117,8 +117,7 @@ const widgetStyles = `
     }
 `;
 
-//#endregion
-//#region resources/js/widget.ts
+// resources/js/widget.ts
 const ANNOTATION_COLOR = "#e11d48";
 const ANNOTATION_STROKE = 4;
 const MIN_ZOOM = .5;
@@ -1137,6 +1136,5 @@ function registerFeedbackReporterElement(tagName = "trust-feedback-reporter") {
 	registeredElementConstructors.set(tagName, elementConstructor);
 }
 
-//#endregion
 export { FeedbackReporterElement, registerFeedbackReporterElement };
 //# sourceMappingURL=widget.js.map

@@ -1,5 +1,4 @@
-import { l as FeedbackReporterConfig } from "./types-Bv_lx0RT.js";
-//#region resources/js/widget.d.ts
+import { l as FeedbackReporterConfig } from "./types-CEHkQOCM.js";
 export type FeedbackReporterColorScheme = 'auto' | 'light' | 'dark';
 export interface FeedbackReporterWidgetConfig {
   endpoint?: string;
@@ -31,6 +30,5 @@ export declare class FeedbackReporterElement extends HTMLElementBase {
   close(): void;
 }
 export declare function registerFeedbackReporterElement(tagName?: string): void;
-//#endregion
 export {};
 //# sourceMappingURL=widget.d.ts.map

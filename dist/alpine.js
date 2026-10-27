@@ -1,6 +1,6 @@
-import { c as createId, j as ValidationError, n as createFeedbackReporter } from "./reporter-C-zwQXFf.js";
+import { c as createId, j as ValidationError, n as createFeedbackReporter } from "./reporter-bY1i5Yql.js";
 
-//#region resources/js/alpine.ts
+// resources/js/alpine.ts
 function createAlpineFeedbackReporter(config) {
 	const reporter = createFeedbackReporter(config);
 	return {
@@ -80,6 +80,5 @@ function createAlpineFeedbackReporter(config) {
 	};
 }
 
-//#endregion
 export { createAlpineFeedbackReporter };
 //# sourceMappingURL=alpine.js.map
